@@ -1,0 +1,22 @@
+[project]
+name = "shopify-meta-connector"
+version = "0.1.0"
+description = "FastAPI Shopify connector for a future Meta WhatsApp commerce assistant"
+requires-python = ">=3.13"
+dependencies = [
+    "fastapi>=0.116,<1.0",
+    "httpx>=0.28,<1.0",
+    "uvicorn>=0.35,<1.0",
+]
+
+[dependency-groups]
+dev = [
+    "workers-py",
+    "workers-runtime-sdk",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.25",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]

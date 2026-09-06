@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "shopify-meta-connector",
+  "main": "worker.py",
+  "compatibility_date": "2026-09-03",
+  "compatibility_flags": ["python_workers"],
+  "vars": {
+    "SHOPIFY_API_VERSION": "2026-07"
+  },
+  "secrets": {
+    "required": ["SHOPIFY_STORE_DOMAIN", "SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET"]
+  }
+}
