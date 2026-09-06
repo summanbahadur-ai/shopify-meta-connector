@@ -8,3 +8,4 @@ __pycache__/
 .uv/
 .wrangler/
 .DS_Store
+.venv-workers/
