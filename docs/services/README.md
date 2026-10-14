@@ -10,7 +10,7 @@ by purpose. They do not imply separate deployed services.
 | [shared.md](shared.md) | Settings, Shopify authentication, HTTP calls, errors |
 | [shop.md](shop.md) | Connection test and store details |
 | [products.md](products.md) | Product listing and CSV download |
-| [orders.md](orders.md) | Order listing and order status |
+| [orders.md](orders.md) | Validated order-status lookup and natural-language messages |
 | [content.md](content.md) | Policies, pages, and FAQ search |
 | [template.md](template.md) | Starting point for a new operation |
 

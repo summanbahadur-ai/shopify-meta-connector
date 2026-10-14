@@ -8,8 +8,6 @@ class FakeClient:
             return {'shop': {'name': 'Demo Store', 'myshopifyDomain': 'demo.myshopify.com'}}
         if 'Products' in query:
             return {'products': {'nodes': [{'id': 'gid://shopify/Product/1', 'title': 'A'}], 'pageInfo': {'hasNextPage': False, 'endCursor': None}}}
-        if 'Orders' in query:
-            return {'orders': {'nodes': [{'id': 'gid://shopify/Order/1', 'name': '#1001', 'displayFinancialStatus': 'PAID', 'displayFulfillmentStatus': 'FULFILLED'}], 'pageInfo': {'hasNextPage': False, 'endCursor': None}}}
         if 'Policies' in query:
             return {'shop': {'shopPolicies': [{'id': '1', 'title': 'Refund Policy', 'type': 'REFUND_POLICY', 'body': '<p>Refunds</p>', 'url': 'https://example.com/policies/refund-policy'}]}}
         if 'Pages' in query:
@@ -27,12 +25,6 @@ async def test_connection():
 @pytest.mark.asyncio
 async def test_products():
     result = await ShopifyService(FakeClient()).get_products(limit=10)
-    assert result['count'] == 1
-
-
-@pytest.mark.asyncio
-async def test_orders():
-    result = await ShopifyService(FakeClient()).get_orders(limit=10)
     assert result['count'] == 1
 
 

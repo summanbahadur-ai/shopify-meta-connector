@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import csv
 import io
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from pydantic import ValidationError
 
 from app.api.dependencies import get_shopify_service
 from app.services.shopify_service import ShopifyService
+from app.schemas.order_status import OrderLookup, OrderStatusResponse
 
 router = APIRouter(prefix="/shopify", tags=["Shopify"])
 
@@ -44,16 +46,29 @@ async def export_products(service: ShopifyService = Depends(get_shopify_service)
     return StreamingResponse(iter([stream.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=shopify-product-catalog.csv"})
 
 
-@router.get("/orders")
-async def orders(limit: int = Query(20, ge=1, le=100), after: str | None = None, query: str | None = None, service: ShopifyService = Depends(get_shopify_service)):
-    return await service.get_orders(limit, after, query)
+def order_lookup_input(order_number: str) -> OrderLookup:
+    try:
+        return OrderLookup(order_number=order_number)
+    except ValidationError as exc:
+        # Do not echo private lookup values in validation messages.
+        raise HTTPException(status_code=422, detail=[
+            {"loc": ["query", *error["loc"]], "msg": error["msg"], "type": error["type"]}
+            for error in exc.errors(include_input=False, include_context=False)
+        ]) from exc
 
 
-@router.get("/orders/status")
-async def order_status(order_number: str, service: ShopifyService = Depends(get_shopify_service)):
-    order = await service.get_order_status(order_number)
+def get_order_status_service(request: Request,
+                             lookup: OrderLookup = Depends(order_lookup_input)) -> ShopifyService:
+    # This nested dependency prevents settings loading if a required input is missing.
+    return get_shopify_service(request)
+
+
+@router.get("/orders/status", response_model=OrderStatusResponse)
+async def order_status(lookup: OrderLookup = Depends(order_lookup_input),
+                       service: ShopifyService = Depends(get_order_status_service)):
+    order = await service.get_order_status(lookup.order_number)
     if order is None:
-        raise HTTPException(status_code=404, detail="Order not found")
+        raise HTTPException(status_code=404, detail="No matching order found within the store's accessible order history")
     return order
 
 

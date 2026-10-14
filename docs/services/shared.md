@@ -53,6 +53,10 @@ current request; it does not retry that request with a fresh token.
 | GraphQL network error, other HTTP error, or nonempty errors array | 502, `{"detail": "<Shopify API message>"}` |
 | Invalid HTTP query parameters | 422 with FastAPI validation details |
 
+Order lookup additionally returns 409 for ambiguous matches and 503 for exceeded
+lookup budgets; its operation-specific validation errors omit the supplied input
+values. See [orders.md](orders.md).
+
 GraphQL errors cause failure even if a partial `data` payload exists. Malformed
 JSON and unexpected/missing response fields do not have dedicated error handling;
 do not assume all upstream failures become the structured 502 responses above.

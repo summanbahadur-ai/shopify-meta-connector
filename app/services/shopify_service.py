@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.schemas.order_status import OrderLookup
+from app.services.order_lookup import OrderLookupService
+
 
 SHOP_QUERY = """
 query ShopConnection {
@@ -24,18 +27,6 @@ query Products($first: Int!, $after: String) {
       variants(first: 100) {
         nodes { id title sku barcode price compareAtPrice }
       }
-    }
-    pageInfo { hasNextPage endCursor }
-  }
-}
-"""
-
-ORDERS_QUERY = """
-query Orders($first: Int!, $after: String, $query: String) {
-  orders(first: $first, after: $after, query: $query, sortKey: CREATED_AT, reverse: true) {
-    nodes {
-      id name createdAt processedAt cancelledAt
-      displayFinancialStatus displayFulfillmentStatus
     }
     pageInfo { hasNextPage endCursor }
   }
@@ -86,20 +77,9 @@ class ShopifyService:
                 return products
             after = page["page_info"]["endCursor"]
 
-    async def get_orders(self, limit: int = 20, after: str | None = None, query: str | None = None) -> dict[str, Any]:
-        first = min(max(limit, 1), 100)
-        connection = (await self.client.query(ORDERS_QUERY, {"first": first, "after": after, "query": query}))["orders"]
-        return {"count": len(connection["nodes"]), "orders": connection["nodes"], "page_info": connection["pageInfo"]}
-
     async def get_order_status(self, order_number: str) -> dict[str, Any] | None:
-        normalized = order_number.strip()
-        if not normalized.startswith("#"):
-            normalized = f"#{normalized}"
-        page = await self.get_orders(limit=10, query=f"name:{normalized}")
-        for order in page["orders"]:
-            if order["name"] == normalized:
-                return order
-        return None
+        lookup = OrderLookup(order_number=order_number)
+        return await OrderLookupService(self.client).get_status(lookup)
 
     async def get_policies(self) -> list[dict[str, Any]]:
         return (await self.client.query(POLICIES_QUERY))["shop"]["shopPolicies"]

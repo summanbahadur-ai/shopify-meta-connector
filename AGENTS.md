@@ -1,4 +1,4 @@
-﻿# Simple project guide
+# Simple project guide
 
 ## Which file is the main file?
 
@@ -16,6 +16,10 @@ app/
   api/                        API URLs and request handling
   services/shopify_service.py Shopify business logic
   clients/shopify_client.py   Calls the Shopify API
+  clients/order_queries.py   GraphQL queries for order lookup
+  services/order_lookup.py   Validated, filtered order discovery
+  messaging/                 Status mappings and deterministic messages
+  schemas/order_status.py    Lookup validation and response models
   core/config.py              Reads settings and credentials
   core/exceptions.py          Error definitions
   schemas/                    Reserved for data schemas
@@ -173,7 +177,31 @@ Keep API handling, service logic, and Shopify API calls in their existing folder
 Preserve both `app/main.py` and `worker.py` as entry points.
 Never commit `.env` or credentials. Run relevant tests when changing code.
 
+### WhatsApp chatbot and natural-language conventions
+
+This backend will support a WhatsApp chatbot connected to a Shopify store.
+Generate customer-facing status messages deterministically, without an LLM.
+Keep Shopify status/keyword mappings and natural-language templates in separate,
+extensible files under `app/messaging/` (orders use `order_messages.py`). Keep
+formatting and status derivation in `order_formatter.py`, input validation in
+`app/schemas/`, Shopify GraphQL documents in `app/clients/`, and lookup/business
+logic in `app/services/`. Routes should handle HTTP concerns only.
+
+Return structured facts alongside the readable message so a future WhatsApp
+handler can use the same service without parsing prose. Add new states/templates
+to the mapping module and test the formatter when extending behavior. Never
+invent shipment status, product quantities, tracking numbers, or delivery dates.
+Distinguish fulfilled from shipped/delivered and keep split shipments separate.
+Use validated, filtered Shopify searches; never expose a general order-listing
+endpoint. Order-status lookup currently requires an order number; do not add email/phone
+lookup unless requested. An order number is not proof of customer ownership.
+Restrict order details to a trusted backend until customer authorization exists.
+
 ## Official Cloudflare help
 
 - [Deploy with GitHub Actions](https://developers.cloudflare.com/workers/ci-cd/external-cicd/github-actions/)
 - [Create an API token](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
+
+Service contracts should describe the final current behavior directly. Remove
+obsolete behavior instead of retaining it as a history or a completed requested
+change. Use a Requested change section only while a change is actually pending.

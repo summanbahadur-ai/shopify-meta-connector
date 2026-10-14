@@ -8,3 +8,11 @@ class ShopifyAuthenticationError(ShopifyError):
 
 class ShopifyAPIError(ShopifyError):
     pass
+
+
+class AmbiguousOrderError(ShopifyError):
+    pass
+
+
+class OrderLookupLimitError(ShopifyError):
+    pass

@@ -10,7 +10,8 @@ A scalable FastAPI service that connects one Shopify store to a backend API. Thi
 - Shop connection test and shop metadata.
 - Product catalog retrieval with cursor pagination.
 - Product catalog CSV download.
-- Orders and order-status lookup.
+- Validated order-status lookup by required order number.
+- Deterministic customer-friendly order messages with items and tracking (no LLM).
 - Shopify legal policies.
 - Shopify content pages and FAQ lookup.
 - Cloudflare Python Workers entrypoint and configuration.
@@ -164,15 +165,14 @@ Expected shape:
 | GET | `/api/v1/shopify/shop` | Store metadata |
 | GET | `/api/v1/shopify/products` | Paginated products |
 | GET | `/api/v1/shopify/products/export.csv` | Download complete product catalog as CSV |
-| GET | `/api/v1/shopify/orders` | Paginated/searchable orders |
-| GET | `/api/v1/shopify/orders/status?order_number=1001` | Minimal order status lookup |
+| GET | `/api/v1/shopify/orders/status` | Requires order_number; returns message, items, and shipments |
 | GET | `/api/v1/shopify/policies` | Store legal policies |
 | GET | `/api/v1/shopify/pages` | Shopify content pages |
 | GET | `/api/v1/shopify/faq` | Search pages for FAQ content |
 
 ### Pagination
 
-Products, orders, and pages expose Shopify's cursor-based pagination. Example:
+Products and pages expose Shopify's cursor-based pagination. Example:
 
 ```text
 GET /api/v1/shopify/products?limit=50
@@ -188,7 +188,21 @@ The CSV catalog endpoint follows all product cursors automatically.
 
 ## Important order-status security note
 
-`/orders/status` currently returns only non-PII order status fields and exists for backend testing. Do **not** expose order lookup directly to an unverified WhatsApp customer in the final chatbot. The future Meta flow should verify that the sender is authorized for the order before returning order details.
+`/orders/status` returns product and shipment details plus a readable message.
+It currently has no caller authentication. Restrict it to a trusted backend;
+the future WhatsApp flow must verify the sender's ownership before returning
+order details. Knowing an order number does not verify ownership.
+
+Order number is mandatory. Example:
+
+```text
+GET /api/v1/shopify/orders/status?order_number=1001
+```
+
+Missing or invalid order numbers return 422 before Shopify calls. Lookup requires
+an exact order-name match and returns 404 when none is found in accessible history.
+See [the order contract](docs/services/orders.md) for response examples and status rules.
+
 
 ## 4. Run tests
 
