@@ -163,6 +163,12 @@ Open the failed run in GitHub Actions and expand the red step to read the error.
 
 ## Notes for agents working on this project
 
+Read `docs/services/README.md` and the relevant service contract before changing
+application behavior. The contracts describe inputs, external API calls, and
+outputs. A contract's **Requested change** section records work to implement;
+editing Markdown alone does not change the application. After implementation,
+update the contract to match the final behavior and report verification results.
+
 Keep API handling, service logic, and Shopify API calls in their existing folders.
 Preserve both `app/main.py` and `worker.py` as entry points.
 Never commit `.env` or credentials. Run relevant tests when changing code.
