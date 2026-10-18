@@ -3,7 +3,9 @@
   "name": "shopify-meta-connector",
   "main": "worker.py",
   "compatibility_date": "2026-09-03",
-  "compatibility_flags": ["python_workers"],
+  "compatibility_flags": [
+    "python_workers"
+  ],
   "python_modules": {
     "exclude": [
       "**/*.pyc",
@@ -17,6 +19,14 @@
     "SHOPIFY_API_VERSION": "2026-07"
   },
   "secrets": {
-    "required": ["SHOPIFY_STORE_DOMAIN", "SHOPIFY_CLIENT_ID", "SHOPIFY_CLIENT_SECRET"]
+    "required": [
+      "SHOPIFY_STORE_DOMAIN",
+      "SHOPIFY_CLIENT_ID",
+      "SHOPIFY_CLIENT_SECRET"
+    ]
+  },
+  "base_dir": ".cache/worker-source",
+  "build": {
+    "command": "uv run python scripts/prepare_worker_source.py"
   }
 }

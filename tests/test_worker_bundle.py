@@ -20,7 +20,7 @@ def config(root):
 def test_exclusions_keep_full_number_data_and_short_package(tmp_path, capsys):
     config(tmp_path)
     tree(tmp_path, [
-        "worker.py", "app/main.py", "python_modules/dns/resolver.py",
+        "worker.py", ".cache/worker-source/app/main.py", "python_modules/dns/resolver.py",
         "python_modules/phonenumbers/shortdata/region_US.py",
         "python_modules/phonenumbers/shortdata/__init__.py",
         "python_modules/phonenumbers/data/region_US.py",
@@ -39,6 +39,7 @@ def test_missing_vendor_and_conservative_guard(tmp_path, capsys):
     assert check_bundle(tmp_path) == 1
     assert "missing or empty" in capsys.readouterr().err
     tree(tmp_path, [f"python_modules/pkg/file{i}.py" for i in range(934)])
+    (tmp_path / ".cache/worker-source/app").mkdir(parents=True)
     assert check_bundle(tmp_path) == 1
     assert "estimated_parts=950" in capsys.readouterr().out
 
@@ -74,3 +75,65 @@ print(count)
 '''
     result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
     assert result.returncode == 0, result.stderr
+
+
+def test_source_staging_omits_environments_tests_and_caches(tmp_path):
+    from scripts.prepare_worker_source import prepare_source_tree
+
+    config(tmp_path)
+    tree(tmp_path, ["worker.py", "app/__init__.py", "app/main.py",
+        "app/__pycache__/main.pyc", ".venv/lib/unwanted.py", "tests/test_main.py", ".env"])
+    staged = prepare_source_tree(tmp_path)
+    files = {p.relative_to(staged).as_posix() for p in staged.rglob("*") if p.is_file()}
+    assert files == {"app/__init__.py", "app/main.py"}
+    assert (tmp_path / ".env").exists()
+
+
+def test_source_staging_removes_deleted_app_modules(tmp_path):
+    from scripts.prepare_worker_source import prepare_source_tree
+
+    config(tmp_path)
+    tree(tmp_path, ["worker.py", "app/main.py", "app/deleted.py"])
+    staged = prepare_source_tree(tmp_path)
+    (tmp_path / "app/deleted.py").unlink()
+    prepare_source_tree(tmp_path)
+    assert not (staged / "app/deleted.py").exists()
+    assert (staged / "app/main.py").exists()
+
+
+def test_source_staging_rejects_path_outside_workspace(tmp_path):
+    import json
+    import pytest
+    from scripts.prepare_worker_source import prepare_source_tree
+
+    tree(tmp_path, ["worker.py", "app/main.py"])
+    (tmp_path / "wrangler.jsonc").write_text(json.dumps({"base_dir": "../outside", "main": "worker.py"}))
+    with pytest.raises(ValueError):
+        prepare_source_tree(tmp_path)
+
+
+def test_preflight_rejects_project_root_as_source_scan(tmp_path, capsys):
+    import json
+    from scripts.check_worker_bundle import check_bundle
+
+    tree(tmp_path, ["worker.py", "app/main.py", "python_modules/pkg/__init__.py"])
+    (tmp_path / "wrangler.jsonc").write_text(json.dumps({"main": "worker.py"}))
+    assert check_bundle(tmp_path) == 1
+    assert "Unsafe source scan root" in capsys.readouterr().err
+
+
+def test_actual_bundle_guard_rejects_virtual_environment_files(tmp_path, capsys):
+    from scripts.check_worker_bundle import check_built_bundle
+
+    tree(tmp_path, ["worker.py", "app/main.py", "python_modules/pkg/__init__.py",
+                    ".venv/lib/unwanted.py"])
+    assert check_built_bundle(tmp_path) == 1
+    assert ".venv/lib/unwanted.py" in capsys.readouterr().err
+
+
+def test_actual_bundle_guard_reports_only_deployment_files(tmp_path, capsys):
+    from scripts.check_worker_bundle import check_built_bundle
+
+    tree(tmp_path, ["worker.py", "app/main.py", "python_modules/pkg/__init__.py", "README.md"])
+    assert check_built_bundle(tmp_path) == 0
+    assert "files=3" in capsys.readouterr().out

@@ -303,8 +303,12 @@ Never place the Shopify Client Secret in `wrangler.jsonc`, source code, GitHub, 
 
 GitHub Actions runs tests and prepares the Python packages before deployment.
 The **Prepare and inspect Worker bundle** step reports included/excluded file
-counts and performs a dry run. This helps catch multipart upload failures caused
-by excessive dependency files. Supported exclusions in `wrangler.jsonc` remove
+counts and performs a dry run, then inspects the actual output's paths and sizes.
+Wrangler's `base_dir` points at `.cache/worker-source`; the configured build command
+copies only `app/` there. This prevents virtual environments, tests, and duplicate
+vendor Python files from entering the upload through the source scan. Continue
+editing root `app/` and `worker.py`; staging happens automatically when packaging.
+Supported exclusions in `wrangler.jsonc` remove
 unused DNS lookup modules and phone short-code regional data, while preserving
 full international phone-number validation. The file-count guard is a project
 safety margin; the final Cloudflare deployment must still succeed.

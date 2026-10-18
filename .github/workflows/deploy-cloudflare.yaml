@@ -31,8 +31,10 @@ jobs:
       - name: Prepare and inspect Worker bundle
         run: |
           uv run pywrangler sync
+          uv run python scripts/prepare_worker_source.py
           uv run python scripts/check_worker_bundle.py
-          uv run pywrangler deploy --dry-run
+          uv run pywrangler deploy --dry-run --outdir .wrangler/bundle-check
+          uv run python scripts/check_worker_bundle.py --bundle-dir .wrangler/bundle-check
 
       - name: Configure Shopify secrets
         env:
