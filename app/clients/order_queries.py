@@ -1,18 +1,19 @@
 """Shopify 2026-07 GraphQL documents for filtered order lookup."""
 
 ORDER_LOOKUP = """
-query OrderLookup($first: Int!, $after: String, $query: String!) {
+query OrderLookup($first: Int!, $after: String, $query: String!, $includePhone: Boolean!) {
   orders(first: $first, after: $after, query: $query, sortKey: CREATED_AT, reverse: true) {
-    nodes { id name }
+    nodes { id name email phone @include(if: $includePhone) }
     pageInfo { hasNextPage endCursor }
   }
 }
 """
 
 ORDER_STATUS_DETAILS = """
-query OrderStatusDetails($id: ID!) {
+query OrderStatusDetails($id: ID!, $includePhone: Boolean!) {
   order(id: $id) {
-    id name cancelledAt displayFinancialStatus displayFulfillmentStatus
+    id name email phone @include(if: $includePhone)
+    cancelledAt displayFinancialStatus displayFulfillmentStatus
     lineItems(first: 100) {
       nodes { id title quantity currentQuantity requiresShipping }
       pageInfo { hasNextPage endCursor }

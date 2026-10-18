@@ -77,8 +77,9 @@ class ShopifyService:
                 return products
             after = page["page_info"]["endCursor"]
 
-    async def get_order_status(self, order_number: str) -> dict[str, Any] | None:
-        lookup = OrderLookup(order_number=order_number)
+    async def get_order_status(self, order_number: str, email: str,
+                               phone: str | None = None) -> dict[str, Any] | None:
+        lookup = OrderLookup(order_number=order_number, email=email, phone=phone)
         return await OrderLookupService(self.client).get_status(lookup)
 
     async def get_policies(self) -> list[dict[str, Any]]:

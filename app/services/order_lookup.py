@@ -6,7 +6,7 @@ from typing import Any, Protocol
 from app.clients import order_queries as queries
 from app.core.exceptions import AmbiguousOrderError, OrderLookupLimitError, ShopifyAPIError
 from app.messaging.order_formatter import format_order_status
-from app.schemas.order_status import OrderLookup
+from app.schemas.order_status import OrderLookup, email_forms, normalize_phone
 
 
 class GraphQLClient(Protocol):
@@ -72,12 +72,38 @@ class OrderLookupService:
         worker = OrderLookupService(self.client)
         return await worker._get_status(lookup)
 
+    @staticmethod
+    def _matches(order: dict, lookup: OrderLookup) -> bool:
+        if order.get("name") != lookup.order_number:
+            return False
+        email = order.get("email")
+        if not isinstance(email, str):
+            return False
+        try:
+            if email_forms(email)[0] != lookup.email:
+                return False
+        except ValueError:
+            return False
+        if lookup.phone is not None:
+            phone = order.get("phone")
+            if not isinstance(phone, str):
+                return False
+            try:
+                if normalize_phone(phone) != lookup.phone:
+                    return False
+            except ValueError:
+                return False
+        return True
+
     async def _get_status(self, lookup: OrderLookup) -> dict | None:
-        search = f"name:{search_value(lookup.order_number)}"
+        email_filters = [f"email:{search_value(value)}" for value in email_forms(lookup.email)]
+        email_filter = email_filters[0] if len(email_filters) == 1 else f"({' OR '.join(email_filters)})"
+        search = f"name:{search_value(lookup.order_number)} AND {email_filter}"
+        include_phone = lookup.phone is not None
         matches: dict[str, dict] = {}
         async for order in self._pages(queries.ORDER_LOOKUP,
-                {"first": 50, "query": search}, ("orders",)):
-            if order.get("name") == lookup.order_number:
+                {"first": 50, "query": search, "includePhone": include_phone}, ("orders",)):
+            if self._matches(order, lookup):
                 matches[order["id"]] = order
                 if len(matches) > 1:
                     raise AmbiguousOrderError(
@@ -85,9 +111,13 @@ class OrderLookupService:
         if not matches:
             return None
         identifier = next(iter(matches))
-        data = await self._query(queries.ORDER_STATUS_DETAILS, {"id": identifier})
+        data = await self._query(queries.ORDER_STATUS_DETAILS,
+                                 {"id": identifier, "includePhone": include_phone})
         order = data.get("order")
         if order is None:
+            return None
+        # Contacts can change between discovery and detail retrieval; fail closed.
+        if not self._matches(order, lookup):
             return None
         try:
             order["lineItems"]["nodes"] = [node async for node in self._pages(

@@ -43,8 +43,9 @@ until implementation is complete so the agent can see what needs to change.
 - Validate public inputs; handle errors; preserve unrelated behavior.
 - Add or update relevant tests for the requested behavior, including meaningful
   error and boundary cases. Run them and report the actual result.
-- Update affected contracts and examples after implementation. Replace completed
-  Requested change text with `None pending.` only when it is actually implemented.
+- Update affected contracts and examples after implementation. Describe the final
+  behavior directly, remove obsolete descriptions, and remove the completed
+  Requested change section. Keep that section only while work is pending.
 - Check current official Shopify documentation before changing external API calls,
   scopes, or versions. These contracts record repository behavior, not a guarantee
   that Shopify will accept every query for every store or app.

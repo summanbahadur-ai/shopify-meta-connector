@@ -5,7 +5,7 @@ verification are separate from the mocked tests.
 
 ## Purpose
 
-Find one order using its required order number and return structured facts plus a
+Find one order using its required order number and email address and return structured facts plus a
 customer-friendly message for a future WhatsApp integration. No LLM is used.
 There is no public endpoint for listing orders.
 
@@ -28,20 +28,44 @@ Read [shared.md](shared.md) for credentials, HTTP transport, and upstream errors
 
 ## Input
 
-GET `/api/v1/shopify/orders/status?order_number=1001`.
+GET `/api/v1/shopify/orders/status`.
 
-`order_number` is the only supported lookup input and is mandatory. It accepts
-an order's displayed name, up to 128 characters. Numeric `1001` becomes `#1001`;
-custom store prefixes/suffixes are preserved. Surrounding whitespace is trimmed.
-Missing/blank names, `#` alone, control characters, and overlong names return 422
-before loading Shopify settings or making any Shopify call.
+| Query field | Required | Validation and meaning |
+| --- | --- | --- |
+| `order_number` | Yes | Order's displayed name, up to 128 characters; numeric `1001` becomes `#1001`; store prefixes/suffixes are preserved |
+| `email` | Yes | Valid email syntax, up to 254 characters; trimmed, normalized, and compared case-insensitively with the order's contact email; equivalent Unicode/punycode domain names are supported |
+| `phone` | No | If provided, a valid international phone with country code; normalized to E.164 and matched to the order's contact phone |
 
-Use `%23` for a literal `#` in a URL, or let your HTTP client encode parameters.
+Order number and email must both match the same order. A supplied phone is an
+additional AND check, never an alternative to email. Phone is checked against
+`Order.phone` only, not a customer-profile or shipping/billing-address phone. If
+that field is absent or differs, supplying phone makes the lookup fail with 404.
+
+Missing required fields, blank supplied values, control characters, `#` alone,
+overlong order names, invalid email syntax, and invalid phones return 422 before
+loading Shopify settings or making Shopify calls. All fields are validated even
+if the other supplied fields are valid. Phone input permits common separators,
+e.g. `+1 (415) 555-2671`, but requires an explicit country code; no country is guessed.
+Email validation uses `email-validator` without DNS checks, and phone validation
+uses `phonenumberslite`. Format validation does not prove mailbox/phone ownership.
+
+Examples:
+
+```text
+/api/v1/shopify/orders/status?order_number=1001&email=buyer%40example.com
+/api/v1/shopify/orders/status?order_number=1001&email=buyer%40example.com&phone=%2B14155552671
+```
+
+Use an HTTP client's parameter encoding; literal `#`, `@`, and `+` must be encoded
+when constructing URLs. Inputs and retrieved customer contact details are not
+included in the successful public response.
 
 Internal interface:
 
 ```python
-await ShopifyService(client).get_order_status(order_number="1001")
+await ShopifyService(client).get_order_status(
+    order_number="1001", email="buyer@example.com", phone=None
+)
 ```
 
 Returns the response dictionary below, or `None` for no match. Invalid supplied
@@ -54,23 +78,32 @@ All calls POST GraphQL through the shared Shopify client to
 `https://{store}/admin/api/{version}/graphql.json` (configured version `2026-07`).
 The API's internal order searches remain filtered; they are not publicly exposed.
 
-1. `OrderLookup` queries `orders` using the quoted, escaped name filter
-   `name:"#1001"`. Variables: `first=50`, `after=<cursor or null>`, `query=<filter>`.
-   Search escaping is separate from GraphQL parameterization. No unfiltered order
-   query or customer lookup is made.
-2. Verify that each returned name exactly equals the normalized order number.
-   Follow filtered pages to establish uniqueness and deduplicate IDs. If different
-   orders share the same exact name, return 409 asking the caller to contact support.
-3. For the unique order, `OrderStatusDetails(id)` fetches items and fulfillments.
-   `OrderItems(id, after)` and `FulfillmentItems(id, after)` fetch further item
+1. `OrderLookup` queries `orders` using
+   `name:"#1001" AND email:"buyer@example.com"`. Both values are quoted and escaped
+   separately from GraphQL parameterization. Variables: `first=50`,
+   `after=<cursor or null>`, `query=<filter>`, and `includePhone=<phone supplied>`.
+   No unfiltered order query or customer lookup is made.
+   For an international domain, the email filter groups its equivalent Unicode
+   and ASCII-domain spellings with OR, still under AND with the order name.
+   Both sides use the same canonical normalization for exact matching.
+2. Verify exact normalized order name and email locally. If phone was supplied,
+   normalize the returned order phone and require equality too. Null/redacted or
+   mismatching required contact data never bypasses these checks.
+3. Follow filtered pages to establish uniqueness and deduplicate IDs. If different
+   orders match all supplied identifiers, return 409 asking the caller to contact support.
+4. For the unique order, `OrderStatusDetails(id, includePhone)` fetches items and
+   fulfillments. Recheck name/email/optional phone before returning details in case
+   contact data changed between discovery and detail retrieval.
+5. `OrderItems(id, after)` and `FulfillmentItems(id, after)` fetch further item
    pages as needed. Item page size is 100. Fulfillments/tracking arrays are requested
-   without a truncating `first` argument.
+   without a truncating `first` argument. Phone fields use `@include` and are not
+   requested when the phone input is omitted.
 
 ## Upstream response fields
 
-- `OrderLookup`: `orders.nodes` contains only `id` and `name`;
+- `OrderLookup`: `orders.nodes` contains `id`, `name`, `email`, and conditionally `phone`;
   `orders.pageInfo` contains `hasNextPage` and `endCursor`.
-- `OrderStatusDetails`: `order` contains `id`, `name`, `cancelledAt`,
+- `OrderStatusDetails`: `order` contains `id`, `name`, `email`, conditionally `phone`, `cancelledAt`,
   `displayFinancialStatus`, `displayFulfillmentStatus`, `lineItems`, `fulfillments`.
 - `lineItems.nodes`: `id`, `title`, `quantity`, `currentQuantity`, `requiresShipping`;
   `pageInfo` is included. Current quantities exclude refunded/removed units;
@@ -159,20 +192,55 @@ rather than returning truncated data. Request budgets are isolated per lookup.
 
 ## Shopify access and integration limits
 
-Requires `read_orders`. This lookup does not query customer profiles, email,
-phone, or addresses and does not require `read_customers` for its search.
-Default order access is the last 60 days; older orders require `read_all_orders`
-approval/access. A no-match does not prove an order never existed outside the
-accessible history window.
+Requires `read_orders`, plus access to the protected **Email** field and, for
+requests supplying phone, the protected **Phone** field. `read_customers` is not
+needed for this implementation: no `Customer` object is queried. There is no
+`read_emails` or `read_phones` scope to add. `read_orders` alone does not override
+Shopify's protected-field restrictions.
+
+### Update the Shopify app permissions
+
+1. Open the existing app in Shopify's **Dev Dashboard > Apps > your app > Versions**.
+   Ensure its access scopes include `read_orders`; preserve the existing product
+   and content scopes used by other services.
+2. If you change scopes, create/release a new app version, then approve the new
+   permissions for the installed store. Releasing a version alone does not grant
+   new scopes to existing installations. Follow Shopify's install/update flow;
+   do not uninstall the working app just to refresh permissions.
+3. Check access to protected Email and Phone fields. For a public app, Shopify's
+   documented path is **Partner Dashboard > Apps > your app > API access requests >
+   Protected customer data access**. Request/select Email and Phone and explain
+   that they are used to match an order-status lookup to the order's contacts.
+   Follow the review requirements shown for your app. Development-store-only apps
+   still select the fields but do not need a production review.
+4. Shopify documents different access rules by app type: protected fields are
+   available to custom-distribution apps; public apps require approval; legacy
+   admin-created custom app access can depend on the store plan. If the public-app
+   request screen is absent for a Dev Dashboard custom app, do not assume you need
+   to create a public app or add `read_customers`. Check the app's distribution,
+   granted scopes, and actual Email/Phone field access first.
+5. After permission changes are granted, deploy this code through GitHub Actions
+   and test a known matching order/email, then the optional phone. Client ID and
+   Client Secret remain the same for the same app. The existing client-credentials
+   flow obtains access tokens; do not replace GitHub Secrets with a temporary token.
+   A fresh deployment also avoids reusing the old in-memory access-token cache.
+
+Default order access is the last 60 days; older orders need `read_all_orders`
+approval/access. This is independent of Email/Phone protected-field access.
+A no-match does not prove the order never existed outside the accessible history.
+Shopify GraphQL access errors follow shared 502 handling; redacted null contact
+fields cannot be verified and produce the same 404 as a nonmatching identifier.
 
 The HTTP endpoint currently has no caller authentication. Restrict access to a
 trusted backend until the WhatsApp integration verifies customer/order ownership.
-Syntax validation and knowledge of an order number are not proof of ownership.
+Matching identifiers reduce accidental disclosure but do not prove email/phone
+ownership. A customer-facing integration still needs a trusted identity check.
 
 ## Verification
 
 `tests/test_order_lookup.py` covers route removal, validation before settings or
-Shopify calls, required order number, normalization/escaping, exact matching, duplicate names on
+Shopify calls, required order number and email, optional phone validation, normalization/escaping,
+exact contact matching and detail rechecks, duplicate names on
 later pages, order pagination/deduplication, no match, request budget,
 broken pagination, item pagination, message-copy extension, processing/payment,
 cancellation, split shipments and remaining quantities, tracking, mixed digital
@@ -187,3 +255,7 @@ verify live Shopify permissions or replace a Cloudflare packaging check.
 - [Order fields and access](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Order)
 - [Fulfillment fields](https://shopify.dev/docs/api/admin-graphql/2026-07/objects/Fulfillment)
 - [Fulfillment status keywords](https://shopify.dev/docs/api/admin-graphql/2026-07/enums/FulfillmentDisplayStatus)
+
+- [Protected customer data and app-type access rules](https://shopify.dev/docs/apps/launch/protected-customer-data)
+- [Manage and update scopes](https://shopify.dev/docs/apps/build/authentication-authorization/manage-access-scopes)
+- [Client-credentials grant and scope updates](https://shopify.dev/docs/apps/build/authentication-authorization/client-credentials-grant)

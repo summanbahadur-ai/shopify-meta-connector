@@ -10,7 +10,7 @@ A scalable FastAPI service that connects one Shopify store to a backend API. Thi
 - Shop connection test and shop metadata.
 - Product catalog retrieval with cursor pagination.
 - Product catalog CSV download.
-- Validated order-status lookup by required order number.
+- Validated order-status lookup by required order number and email, with optional phone.
 - Deterministic customer-friendly order messages with items and tracking (no LLM).
 - Shopify legal policies.
 - Shopify content pages and FAQ lookup.
@@ -165,7 +165,7 @@ Expected shape:
 | GET | `/api/v1/shopify/shop` | Store metadata |
 | GET | `/api/v1/shopify/products` | Paginated products |
 | GET | `/api/v1/shopify/products/export.csv` | Download complete product catalog as CSV |
-| GET | `/api/v1/shopify/orders/status` | Requires order_number; returns message, items, and shipments |
+| GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message, items, and shipments |
 | GET | `/api/v1/shopify/policies` | Store legal policies |
 | GET | `/api/v1/shopify/pages` | Shopify content pages |
 | GET | `/api/v1/shopify/faq` | Search pages for FAQ content |
@@ -193,14 +193,20 @@ It currently has no caller authentication. Restrict it to a trusted backend;
 the future WhatsApp flow must verify the sender's ownership before returning
 order details. Knowing an order number does not verify ownership.
 
-Order number is mandatory. Example:
+Order number and email are mandatory; phone is optional. Examples:
 
 ```text
-GET /api/v1/shopify/orders/status?order_number=1001
+GET /api/v1/shopify/orders/status?order_number=1001&email=buyer%40example.com
+GET /api/v1/shopify/orders/status?order_number=1001&email=buyer%40example.com&phone=%2B14155552671
 ```
 
-Missing or invalid order numbers return 422 before Shopify calls. Lookup requires
-an exact order-name match and returns 404 when none is found in accessible history.
+Missing or invalid required inputs, or an invalid supplied phone, return 422
+before Shopify calls. Order name and contact email must match; optional phone must
+match the order's contact phone too. Mismatches return 404 without order details.
+Phone needs an international country code. The app uses `read_orders`, protected
+Email access, and protected Phone access when phone is supplied. It does not query
+customer profiles or need `read_customers`. See the permission-update steps in the
+order contract below.
 See [the order contract](docs/services/orders.md) for response examples and status rules.
 
 

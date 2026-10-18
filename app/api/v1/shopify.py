@@ -46,9 +46,9 @@ async def export_products(service: ShopifyService = Depends(get_shopify_service)
     return StreamingResponse(iter([stream.getvalue()]), media_type="text/csv", headers={"Content-Disposition": "attachment; filename=shopify-product-catalog.csv"})
 
 
-def order_lookup_input(order_number: str) -> OrderLookup:
+def order_lookup_input(order_number: str, email: str, phone: str | None = None) -> OrderLookup:
     try:
-        return OrderLookup(order_number=order_number)
+        return OrderLookup(order_number=order_number, email=email, phone=phone)
     except ValidationError as exc:
         # Do not echo private lookup values in validation messages.
         raise HTTPException(status_code=422, detail=[
@@ -66,7 +66,7 @@ def get_order_status_service(request: Request,
 @router.get("/orders/status", response_model=OrderStatusResponse)
 async def order_status(lookup: OrderLookup = Depends(order_lookup_input),
                        service: ShopifyService = Depends(get_order_status_service)):
-    order = await service.get_order_status(lookup.order_number)
+    order = await service.get_order_status(lookup.order_number, lookup.email, lookup.phone)
     if order is None:
         raise HTTPException(status_code=404, detail="No matching order found within the store's accessible order history")
     return order

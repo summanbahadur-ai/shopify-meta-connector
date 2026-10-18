@@ -193,8 +193,11 @@ to the mapping module and test the formatter when extending behavior. Never
 invent shipment status, product quantities, tracking numbers, or delivery dates.
 Distinguish fulfilled from shipped/delivered and keep split shipments separate.
 Use validated, filtered Shopify searches; never expose a general order-listing
-endpoint. Order-status lookup currently requires an order number; do not add email/phone
-lookup unless requested. An order number is not proof of customer ownership.
+endpoint. Order-status lookup requires both order number and email, with phone optional.
+All supplied identifiers must match the same order. Compare email and phone to
+Order.email/Order.phone only; do not add customer-profile/address fallback without
+an explicit requirement. Keep contact fields private and fail closed on missing
+or mismatching data. Matching identifiers is not proof of contact ownership.
 Restrict order details to a trusted backend until customer authorization exists.
 
 ## Official Cloudflare help

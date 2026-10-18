@@ -12,8 +12,8 @@ def connection(nodes, more=False, cursor=None):
     return {"nodes": nodes, "pageInfo": {"hasNextPage": more, "endCursor": cursor}}
 
 
-def candidate(name="#1001", identifier="1"):
-    return {"id": f"gid://shopify/Order/{identifier}", "name": name}
+def candidate(name="#1001", identifier="1", email="buyer@example.com", phone="+14155552671"):
+    return {"id": f"gid://shopify/Order/{identifier}", "name": name, "email": email, "phone": phone}
 
 
 def item(identifier="a", title="Blue Shirt", quantity=1, shipping=True):
@@ -63,11 +63,11 @@ class GraphQLScript:
         return deepcopy(response)
 
 
-def lookup_script(order=None, search='name:"#1001"'):
+def lookup_script(order=None, search='name:"#1001" AND email:"buyer@example.com"'):
     return GraphQLScript([
-        ("OrderLookup", {"first": 50, "after": None, "query": search},
+        ("OrderLookup", {"first": 50, "after": None, "query": search, "includePhone": False},
          {"orders": connection([candidate()])}),
-        ("OrderStatusDetails", {"id": "gid://shopify/Order/1"},
+        ("OrderStatusDetails", {"id": "gid://shopify/Order/1", "includePhone": False},
          {"order": order or details()}),
     ])
 
@@ -93,6 +93,12 @@ def test_order_listing_is_not_public(api):
     {"email": "bad-email"}, {"phone": "4155552671"}, {"phone": "+10000000000"},
     {"email": "buyer@example.com", "phone": "123"},
     {"order_number": "1001\nOR email:*"}, {"order_number": "x" * 129},
+    {"order_number": "1001"},
+    {"order_number": "1001", "email": ""},
+    {"order_number": "1001", "email": "bad-email"},
+    {"order_number": "1001", "email": "buyer@example.com", "phone": "4155552671"},
+    {"order_number": "1001", "email": "buyer@example.com", "phone": "+10000000000"},
+    {"order_number": "1001", "email": "buyer@example.com", "phone": " "},
 ])
 def test_invalid_lookup_never_calls_shopify(api, params):
     client, script = api
@@ -104,7 +110,7 @@ def test_invalid_lookup_never_calls_shopify(api, params):
 def test_route_returns_formatted_order_without_customer_data(api):
     client, script = api
     script.steps = lookup_script().steps
-    response = client.get("/api/v1/shopify/orders/status", params={"order_number": " 1001 "})
+    response = client.get("/api/v1/shopify/orders/status", params={"order_number": " 1001 ", "email": " BUYER@example.com "})
     assert response.status_code == 200
     body = response.json()
     assert body["order_number"] == "#1001"
@@ -119,11 +125,11 @@ def test_route_returns_formatted_order_without_customer_data(api):
 @pytest.mark.asyncio
 async def test_order_number_lookup_requires_exact_match():
     script = GraphQLScript([
-        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001"'},
+        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
          {"orders": connection([candidate(name="#10010", identifier="2"), candidate()])}),
-        ("OrderStatusDetails", {"id": "gid://shopify/Order/1"}, {"order": details()}),
+        ("OrderStatusDetails", {"id": "gid://shopify/Order/1", "includePhone": False}, {"order": details()}),
     ])
-    result = await ShopifyService(script).get_order_status(order_number=" 1001 ")
+    result = await ShopifyService(script).get_order_status(order_number=" 1001 ", email="buyer@example.com")
     assert result["order_number"] == "#1001"
 
 
@@ -136,21 +142,21 @@ async def test_missing_order_number_is_invalid_for_direct_service():
         OrderLookup()
 
 
-def test_openapi_requires_only_order_number(api):
+def test_openapi_requires_order_number_email_and_optional_phone(api):
     client, _ = api
     params = client.get("/openapi.json").json()["paths"]["/api/v1/shopify/orders/status"]["get"]["parameters"]
-    assert [(p["name"], p["required"]) for p in params] == [("order_number", True)]
+    assert [(p["name"], p["required"]) for p in params] == [("order_number", True), ("email", True), ("phone", False)]
 
 
 def test_duplicate_order_names_on_later_page_are_not_guessed(api):
     client, script = api
     script.steps = [
-        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001"'},
+        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
          {"orders": connection([candidate()], True, "next")}),
-        ("OrderLookup", {"first": 50, "after": "next", "query": 'name:"#1001"'},
+        ("OrderLookup", {"first": 50, "after": "next", "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
          {"orders": connection([candidate(identifier="2")])}),
     ]
-    response = client.get("/api/v1/shopify/orders/status", params={"order_number": "1001"})
+    response = client.get("/api/v1/shopify/orders/status", params={"order_number": "1001", "email": "buyer@example.com"})
     assert response.status_code == 409
     assert "order number" in response.json()["detail"].lower()
     assert "#1001" not in response.text
@@ -158,19 +164,19 @@ def test_duplicate_order_names_on_later_page_are_not_guessed(api):
 
 def test_no_matches_is_404(api):
     client, script = api
-    script.steps = [("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001"'},
+    script.steps = [("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
                      {"orders": connection([])})]
-    assert client.get("/api/v1/shopify/orders/status", params={"order_number": "1001"}).status_code == 404
+    assert client.get("/api/v1/shopify/orders/status", params={"order_number": "1001", "email": "buyer@example.com"}).status_code == 404
 
 
 @pytest.mark.asyncio
 async def test_search_value_is_escaped_not_interpreted_as_operator():
     name = 'WEB-1001" OR name:*'
     script = GraphQLScript([
-        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"WEB-1001\\" OR name\\:*"'},
+        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"WEB-1001\\" OR name\\:*" AND email:"buyer@example.com"', "includePhone": False},
          {"orders": connection([])}),
     ])
-    assert await ShopifyService(script).get_order_status(order_number=name) is None
+    assert await ShopifyService(script).get_order_status(order_number=name, email="buyer@example.com") is None
 
 
 @pytest.mark.asyncio
@@ -189,7 +195,7 @@ async def test_order_and_fulfillment_item_pagination():
              {"quantity": 1, "lineItem": {"id": "b", "title": "Black Cap"}},
          ])}}),
     ])
-    result = await ShopifyService(script).get_order_status("1001")
+    result = await ShopifyService(script).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "shipped"
     assert "Blue Shirt" in result["message"] and "Black Cap" in result["message"]
     assert len(result["shipments"][0]["items"]) == 2
@@ -212,7 +218,7 @@ async def test_order_and_fulfillment_item_pagination():
     (details(fulfillments=[fulfillment([item()], "IN_TRANSIT", status="CANCELLED")]), "processing", "being processed"),
 ])
 async def test_status_uses_actual_evidence(order, status, phrase):
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == status
     assert phrase in result["message"]
 
@@ -222,7 +228,7 @@ async def test_split_shipments_preserve_items_tracking_and_remaining_quantity():
     a, b = item(quantity=2), item("b", "Black Cap")
     f1 = fulfillment([item()], "DELIVERED")
     f2 = fulfillment([b], "IN_TRANSIT", identifier="f2", trackingInfo=[])
-    result = await ShopifyService(lookup_script(details([a, b], [f1, f2]))).get_order_status("1001")
+    result = await ShopifyService(lookup_script(details([a, b], [f1, f2]))).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "partially_shipped"
     assert result["remaining_items"] == [{"title": "Blue Shirt", "quantity": 1}]
     assert "1 Blue Shirt" in result["message"]
@@ -237,16 +243,16 @@ async def test_digital_fulfillment_does_not_claim_shipped():
     digital = item(shipping=False)
     order = details([digital], [fulfillment([digital], "DELIVERED", requiresShipping=False)],
                     displayFulfillmentStatus="FULFILLED")
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "fulfilled"
     assert "shipped" not in result["message"]
 
 
 def test_broken_pagination_is_not_reported_as_unique(api):
     client, script = api
-    script.steps = [("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001"'},
+    script.steps = [("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
                      {"orders": connection([candidate()], True, None)})]
-    assert client.get("/api/v1/shopify/orders/status", params={"order_number": "1001"}).status_code == 502
+    assert client.get("/api/v1/shopify/orders/status", params={"order_number": "1001", "email": "buyer@example.com"}).status_code == 502
 
 
 @pytest.mark.asyncio
@@ -256,7 +262,7 @@ def test_broken_pagination_is_not_reported_as_unique(api):
 ])
 async def test_carrier_and_delivery_exception_states(display, status):
     order = details(fulfillments=[fulfillment([item()], display)])
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == status
 
 
@@ -264,13 +270,17 @@ async def test_carrier_and_delivery_exception_states(display, status):
 async def test_mixed_digital_and_physical_order_does_not_claim_digital_item_shipped():
     physical, digital = item(), item("ebook", "Digital Book", shipping=False)
     order = details([physical, digital], [fulfillment([physical])])
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "shipped"
     assert "Digital Book" not in result["message"].splitlines()[0]
     assert result["items"][1]["title"] == "Digital Book"
 
 
-@pytest.mark.parametrize("params", [{}, {"email": "bad"}, {"order_number": " "}])
+@pytest.mark.parametrize("params", [
+    {}, {"email": "bad"}, {"order_number": " "}, {"order_number": "1001"},
+    {"order_number": "1001", "email": "bad"},
+    {"order_number": "1001", "email": "buyer@example.com", "phone": "bad"},
+])
 def test_invalid_lookup_is_validated_before_settings_dependency(monkeypatch, params):
     def unconfigured_service(request):
         raise AssertionError("Settings should not be loaded for invalid lookup")
@@ -286,9 +296,9 @@ def test_lookup_budget_returns_503_without_false_success(api, monkeypatch):
 
     client, script = api
     monkeypatch.setattr(OrderLookupService, "MAX_REQUESTS", 1)
-    script.steps = [("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001"'},
+    script.steps = [("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
                      {"orders": connection([candidate()])})]
-    response = client.get("/api/v1/shopify/orders/status", params={"order_number": "1001"})
+    response = client.get("/api/v1/shopify/orders/status", params={"order_number": "1001", "email": "buyer@example.com"})
     assert response.status_code == 503
 
 
@@ -297,27 +307,27 @@ async def test_message_copy_can_be_extended_without_changing_lookup(monkeypatch)
     from app.messaging.order_messages import ORDER_MESSAGES
 
     monkeypatch.setitem(ORDER_MESSAGES, "processing", "Order {order_number}: preparing your items.")
-    result = await ShopifyService(lookup_script()).get_order_status("1001")
+    result = await ShopifyService(lookup_script()).get_order_status("1001", "buyer@example.com")
     assert result["message"].startswith("Order #1001: preparing your items.")
 
 
 @pytest.mark.asyncio
 async def test_order_search_paginates_and_deduplicates_matches():
     script = GraphQLScript([
-        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001"'},
+        ("OrderLookup", {"first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
          {"orders": connection([], True, "onext")}),
-        ("OrderLookup", {"first": 50, "after": "onext", "query": 'name:"#1001"'},
+        ("OrderLookup", {"first": 50, "after": "onext", "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
          {"orders": connection([candidate(), candidate()])}),
-        ("OrderStatusDetails", {"id": "gid://shopify/Order/1"}, {"order": details()}),
+        ("OrderStatusDetails", {"id": "gid://shopify/Order/1", "includePhone": False}, {"order": details()}),
     ])
-    assert (await ShopifyService(script).get_order_status("1001"))["order_number"] == "#1001"
+    assert (await ShopifyService(script).get_order_status("1001", "buyer@example.com"))["order_number"] == "#1001"
 
 
 @pytest.mark.asyncio
 async def test_tracking_url_is_not_executable():
     order = details(fulfillments=[fulfillment([item()], trackingInfo=[
         {"company": None, "number": None, "url": "javascript:alert(1)"}])])
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["shipments"][0]["tracking"][0]["url"] is None
     assert "javascript:" not in result["message"]
 
@@ -326,7 +336,7 @@ async def test_tracking_url_is_not_executable():
 @pytest.mark.parametrize("display", ["FULFILLED", "MARKED_AS_FULFILLED"])
 async def test_explicit_fulfillment_is_not_described_as_preparing(display):
     order = details(fulfillments=[fulfillment([item()], display)], displayFulfillmentStatus="FULFILLED")
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "fulfilled"
     assert result["shipments"][0]["status"] == "fulfilled"
     assert "being prepared" not in result["message"]
@@ -335,7 +345,7 @@ async def test_explicit_fulfillment_is_not_described_as_preparing(display):
 @pytest.mark.asyncio
 async def test_delayed_shipment_overrides_past_transit_evidence():
     order = details(fulfillments=[fulfillment([item()], "DELAYED", inTransitAt="2026-10-01T12:00:00Z")])
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "delivery_exception"
 
 
@@ -343,5 +353,75 @@ async def test_delayed_shipment_overrides_past_transit_evidence():
 async def test_mixed_order_delivery_message_explicitly_scopes_physical_items():
     physical, digital = item(), item("ebook", "Digital Book", shipping=False)
     order = details([physical, digital], [fulfillment([physical], "DELIVERED")])
-    result = await ShopifyService(lookup_script(order)).get_order_status("1001")
+    result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["message"].startswith("The physical items in your order #1001")
+
+
+@pytest.mark.parametrize("returned_email", ["other@example.com", None, "buyer@example.com.evil.test"])
+def test_matching_order_number_with_wrong_or_missing_email_returns_404(api, returned_email):
+    client, script = api
+    script.steps = [("OrderLookup", {
+        "first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"',
+        "includePhone": False}, {"orders": connection([candidate(email=returned_email)])})]
+    response = client.get("/api/v1/shopify/orders/status", params={
+        "order_number": "1001", "email": "buyer@example.com"})
+    assert response.status_code == 404
+    assert "Blue Shirt" not in response.text
+    assert not script.steps
+
+
+@pytest.mark.asyncio
+async def test_duplicate_names_are_disambiguated_by_email():
+    script = lookup_script()
+    script.steps[0][2]["orders"] = connection([
+        candidate(email="other@example.com", identifier="2"),
+        candidate(email="BUYER@example.com"),
+    ])
+    result = await ShopifyService(script).get_order_status("1001", "buyer@example.com")
+    assert result["order_number"] == "#1001"
+
+
+@pytest.mark.parametrize("returned_phone", ["+1 (415) 555-2671", "+442079460018", None])
+def test_optional_phone_must_match_order_contact_phone(api, returned_phone):
+    client, script = api
+    script.steps = [("OrderLookup", {
+        "first": 50, "after": None, "query": 'name:"#1001" AND email:"buyer@example.com"',
+        "includePhone": True}, {"orders": connection([candidate(phone=returned_phone)])})]
+    if returned_phone == "+1 (415) 555-2671":
+        script.steps.append(("OrderStatusDetails", {"id": "gid://shopify/Order/1", "includePhone": True},
+                             {"order": details(phone=returned_phone)}))
+    response = client.get("/api/v1/shopify/orders/status", params={
+        "order_number": "1001", "email": "buyer@example.com", "phone": "+1 (415) 555-2671"})
+    assert response.status_code == (200 if returned_phone == "+1 (415) 555-2671" else 404)
+    assert "+14155552671" not in response.text
+    assert "buyer@example.com" not in response.text
+    assert not script.steps
+
+
+@pytest.mark.asyncio
+async def test_contact_is_rechecked_before_returning_details():
+    script = lookup_script(details(email="changed@example.com"))
+    assert await ShopifyService(script).get_order_status("1001", "buyer@example.com") is None
+
+
+@pytest.mark.asyncio
+async def test_email_is_mandatory_for_direct_schema():
+    from app.schemas.order_status import OrderLookup
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        OrderLookup(order_number="1001")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stored_email", ["buyer@xn--bcher-kva.de", "buyer@bücher.de"])
+async def test_international_email_domain_encodings_match_equivalently(stored_email):
+    search = 'name:"#1001" AND (email:"buyer@xn--bcher-kva.de" OR email:"buyer@bücher.de")'
+    script = GraphQLScript([
+        ("OrderLookup", {"first": 50, "after": None, "query": search, "includePhone": False},
+         {"orders": connection([candidate(email=stored_email)])}),
+        ("OrderStatusDetails", {"id": "gid://shopify/Order/1", "includePhone": False},
+         {"order": details(email=stored_email)}),
+    ])
+    result = await ShopifyService(script).get_order_status("1001", "buyer@xn--bcher-kva.de")
+    assert result["status"] == "processing"
