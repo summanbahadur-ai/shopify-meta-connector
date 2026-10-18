@@ -9,3 +9,5 @@ __pycache__/
 .wrangler/
 .DS_Store
 .venv-workers/
+python_modules/
+.cache/

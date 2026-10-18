@@ -4,6 +4,15 @@
   "main": "worker.py",
   "compatibility_date": "2026-09-03",
   "compatibility_flags": ["python_workers"],
+  "python_modules": {
+    "exclude": [
+      "**/*.pyc",
+      "**/*.pyi",
+      "**/py.typed",
+      "dns/**",
+      "phonenumbers/shortdata/region_*.py"
+    ]
+  },
   "vars": {
     "SHOPIFY_API_VERSION": "2026-07"
   },

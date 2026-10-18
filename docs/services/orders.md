@@ -14,6 +14,7 @@ There is no public endpoint for listing orders.
 | Responsibility | File |
 | --- | --- |
 | HTTP endpoint and validation dependency | `app/api/v1/shopify.py` |
+| Safe order-only exception boundary | `app/api/order_errors.py` |
 | Validated input and public response models | `app/schemas/order_status.py` |
 | Existing service entry point | `app/services/shopify_service.py` |
 | Filtered discovery, exact matching, pagination | `app/services/order_lookup.py` |
@@ -42,7 +43,8 @@ additional AND check, never an alternative to email. Phone is checked against
 that field is absent or differs, supplying phone makes the lookup fail with 404.
 
 Missing required fields, blank supplied values, control characters, `#` alone,
-overlong order names, invalid email syntax, and invalid phones return 422 before
+overlong order names, invalid email syntax, and invalid phones return a formatted
+422 response before
 loading Shopify settings or making Shopify calls. All fields are validated even
 if the other supplied fields are valid. Phone input permits common separators,
 e.g. `+1 (415) 555-2671`, but requires an explicit country code; no country is guessed.
@@ -118,6 +120,7 @@ Success is HTTP 200 with the same dictionary returned by the service:
 
 ```json
 {
+  "success": true,
   "message": "Your order #1001 containing 1 Blue Shirt has shipped.\nShipment 1: 1 Blue Shirt has shipped.\nTracking number: TRACK123 (Example Carrier).\nTrack it here: https://example.com/track/TRACK123",
   "order_number": "#1001",
   "status": "shipped",
@@ -141,7 +144,7 @@ unsafe non-HTTP(S) URLs are omitted. Empty tracking produces an empty list.
 `remaining_items` means physical quantities not yet evidenced as shipped; it does
 not imply items are still awaiting fulfillment or payment (e.g. pickup/cancellation).
 An order with no active items has `items: []` and no item phrase in the header.
-No matching order returns 404, not an empty successful result.
+No matching order returns a formatted 404 message, not an empty successful result.
 
 ## Natural-language rules
 
@@ -175,16 +178,60 @@ Public order states: `processing`, `awaiting_payment`, `cancelled`, `on_hold`,
 `out_for_delivery`, `delivered`, `delivery_exception`. Shipment states additionally
 include `ready_for_pickup` and `picked_up`.
 
-## Errors and work limits
+## Customer-friendly failure responses
 
-| Condition | HTTP response |
-| --- | --- |
-| Missing, blank, or invalid supplied inputs | 422 with field validation details, without echoing supplied values |
-| No match in accessible history | 404 with a history-aware message |
-| Multiple exact matches | 409 asking the caller to contact support; no matched-order details |
-| Lookup exceeds budget | 503 asking the caller to retry or contact support; no partial result |
-| Missing/repeated continuation cursor or incomplete detail data | 502 |
-| Authentication or upstream Shopify failure | Shared 502 behavior |
+The order route catches validation, settings, Shopify, and unexpected exceptions
+in a dedicated try/except HTTP boundary. Technical exceptions, stack traces,
+Shopify error payloads, configuration names, and supplied contact values are never
+included in the order lookup response. Other endpoints retain their own behavior.
+Internal service/client layers may still raise typed exceptions; the boundary
+translates them before any response reaches the customer.
+
+Messages and stable codes are defined in `LOOKUP_ERROR_MESSAGES` in
+`app/messaging/order_messages.py`. HTTP status codes remain meaningful; the chatbot
+should display `message` and branch on `success`/`code`, not parse exception text.
+
+| Condition | HTTP | Code | Customer message |
+| --- | --- | --- | --- |
+| Order number missing | 422 | `missing_order_number` | Please enter your order number, for example #1001. |
+| Email missing | 422 | `missing_email` | Please enter the email address you used when placing the order. |
+| Order number invalid | 422 | `invalid_order_number` | Please enter a valid order number, for example #1001. |
+| Email syntax invalid | 422 | `invalid_email` | Please enter a valid email address, for example name@example.com. |
+| Supplied phone invalid | 422 | `invalid_phone` | Please enter a valid phone number including its country code, for example +14155552671. |
+| No match, incorrect contact, or inaccessible history | 404 | `order_not_found` | We couldn't find an order matching those details. Please check your order number, the email used at checkout, and your phone number if provided, then try again. |
+| Multiple exact matches | 409 | `multiple_orders` | More than one order matches those details. Please contact the store with your order number for help. |
+| Work limit reached | 503 | `lookup_limit` | We couldn't complete your order lookup right now. Please try again shortly or contact the store for help. |
+| Shopify access/API failure, including broken upstream pagination | 502 | `service_unavailable` | We couldn't check your order right now. Please try again shortly. |
+| Configuration or unexpected failure | 500 | `service_unavailable` | We couldn't check your order right now. Please try again shortly. |
+
+Example invalid email response:
+
+```json
+{
+  "success": false,
+  "code": "invalid_email",
+  "message": "Please enter a valid email address, for example name@example.com.",
+  "errors": [{
+    "field": "email",
+    "code": "invalid_email",
+    "message": "Please enter a valid email address, for example name@example.com."
+  }]
+}
+```
+
+If several fields are invalid, `errors` contains all field issues and `message`
+combines their curated messages. The top-level `code` is the first issue's code.
+Non-validation failures use the same envelope with `errors: []`. A mismatch never
+reveals whether the order exists or which contact field differs. A syntactically
+valid custom order name can still return no match; validation cannot establish
+whether a real order exists without querying Shopify.
+
+The server logs only the exception class/category for internal/upstream failures,
+without exception messages, query values, credentials, or tracebacks. The boundary
+also covers settings failures that occur before the endpoint body and response
+validation failures. It does not convert failures into fake successful order data.
+
+## Work limits
 
 Every connection allows at most 20 pages. A lookup allows at most 60 GraphQL
 requests across order searches and item pagination. Limits fail explicitly
@@ -228,7 +275,7 @@ Shopify's protected-field restrictions.
 Default order access is the last 60 days; older orders need `read_all_orders`
 approval/access. This is independent of Email/Phone protected-field access.
 A no-match does not prove the order never existed outside the accessible history.
-Shopify GraphQL access errors follow shared 502 handling; redacted null contact
+Shopify GraphQL access errors use the safe `service_unavailable` 502 response; redacted null contact
 fields cannot be verified and produce the same 404 as a nonmatching identifier.
 
 The HTTP endpoint currently has no caller authentication. Restrict access to a
@@ -244,7 +291,9 @@ exact contact matching and detail rechecks, duplicate names on
 later pages, order pagination/deduplication, no match, request budget,
 broken pagination, item pagination, message-copy extension, processing/payment,
 cancellation, split shipments and remaining quantities, tracking, mixed digital
-items, explicit fulfillment, carrier pickup, and delivery exceptions.
+items, explicit fulfillment, carrier pickup, and delivery exceptions. It also
+covers readable validation/not-found messages, safe unexpected/upstream/settings
+failure handling, and keeping technical error details out of responses.
 
 Run `uv run pytest -q`. Tests mock the external GraphQL boundary; they do not
 verify live Shopify permissions or replace a Cloudflare packaging check.

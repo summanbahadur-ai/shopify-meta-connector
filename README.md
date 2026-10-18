@@ -201,8 +201,11 @@ GET /api/v1/shopify/orders/status?order_number=1001&email=buyer%40example.com&ph
 ```
 
 Missing or invalid required inputs, or an invalid supplied phone, return 422
-before Shopify calls. Order name and contact email must match; optional phone must
-match the order's contact phone too. Mismatches return 404 without order details.
+before Shopify calls, with a readable `message` and field errors rather than
+technical exception details. Order name and contact email must match; optional phone must
+match the order's contact phone too. Mismatches return a formatted 404 message
+without order details. Unexpected/Shopify failures return a safe retry message;
+the order endpoint never returns raw exception details.
 Phone needs an international country code. The app uses `read_orders`, protected
 Email access, and protected Phone access when phone is supplied. It does not query
 customer profiles or need `read_customers`. See the permission-update steps in the
@@ -295,6 +298,16 @@ A `workers.dev` URL is persistent and is fine for this initial deployment. Cloud
 ## 7. Production secrets
 
 Never place the Shopify Client Secret in `wrangler.jsonc`, source code, GitHub, or a committed `.env` file. Cloudflare secrets are encrypted bindings. `SHOPIFY_API_VERSION` is non-sensitive and is stored as a normal Worker variable.
+
+### Cloudflare upload preflight
+
+GitHub Actions runs tests and prepares the Python packages before deployment.
+The **Prepare and inspect Worker bundle** step reports included/excluded file
+counts and performs a dry run. This helps catch multipart upload failures caused
+by excessive dependency files. Supported exclusions in `wrangler.jsonc` remove
+unused DNS lookup modules and phone short-code regional data, while preserving
+full international phone-number validation. The file-count guard is a project
+safety margin; the final Cloudflare deployment must still succeed.
 
 ## Current Shopify token flow
 

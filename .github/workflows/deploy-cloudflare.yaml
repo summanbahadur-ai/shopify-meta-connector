@@ -25,6 +25,15 @@ jobs:
       - name: Install dependencies
         run: uv sync --all-groups
 
+      - name: Run tests
+        run: uv run pytest -q
+
+      - name: Prepare and inspect Worker bundle
+        run: |
+          uv run pywrangler sync
+          uv run python scripts/check_worker_bundle.py
+          uv run pywrangler deploy --dry-run
+
       - name: Configure Shopify secrets
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
