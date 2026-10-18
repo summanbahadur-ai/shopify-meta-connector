@@ -66,6 +66,7 @@ def get_order_status_service(request: Request,
 
 
 @order_router.get("/orders/status", response_model=OrderStatusResponse,
+                  response_model_exclude_unset=True,
                   responses={status: {"model": OrderLookupErrorResponse}
                              for status in (404, 409, 422, 500, 502, 503)})
 async def order_status(lookup: OrderLookup = Depends(order_lookup_input),

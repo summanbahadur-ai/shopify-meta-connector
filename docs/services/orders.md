@@ -109,7 +109,7 @@ The API's internal order searches remain filtered; they are not publicly exposed
   `displayFinancialStatus`, `displayFulfillmentStatus`, `lineItems`, `fulfillments`.
 - `lineItems.nodes`: `id`, `title`, `quantity`, `currentQuantity`, `requiresShipping`;
   `pageInfo` is included. Current quantities exclude refunded/removed units;
-  zero-current-quantity lines are omitted from the public items list.
+  zero-current-quantity lines are omitted from message contents and remaining-item calculations.
 - Each fulfillment: `id`, `status`, `displayStatus`, `requiresShipping`,
   `deliveredAt`, `inTransitAt`, `trackingInfo { company number url }`, and
   `fulfillmentLineItems { nodes { quantity lineItem { id title } } pageInfo }`.
@@ -124,8 +124,6 @@ Success is HTTP 200 with the same dictionary returned by the service:
   "message": "Your order #1001 containing 1 Blue Shirt has shipped.\nShipment 1: 1 Blue Shirt has shipped.\nTracking number: TRACK123 (Example Carrier).\nTrack it here: https://example.com/track/TRACK123",
   "order_number": "#1001",
   "status": "shipped",
-  "items": [{"title": "Blue Shirt", "quantity": 1}],
-  "remaining_items": [],
   "shipments": [{
     "status": "shipped",
     "items": [{"title": "Blue Shirt", "quantity": 1}],
@@ -141,9 +139,33 @@ Success is HTTP 200 with the same dictionary returned by the service:
 Customer email, phone, address, and Shopify IDs are not returned. Shipments retain
 separate item/quantity lists and tracking records. Tracking fields can be null;
 unsafe non-HTTP(S) URLs are omitted. Empty tracking produces an empty list.
-`remaining_items` means physical quantities not yet evidenced as shipped; it does
-not imply items are still awaiting fulfillment or payment (e.g. pickup/cancellation).
-An order with no active items has `items: []` and no item phrase in the header.
+Keep the response limited to useful information:
+
+- There is no top-level `items` field. Product names and quantities are used
+  internally to build the readable message; shipment-specific items are retained
+  only within shipment details.
+- Include `remaining_items` only when `status` is `partially_shipped` and there
+  are unshipped physical quantities. Omit it for awaiting payment, processing,
+  cancelled, and fully shipped/delivered orders. Do not repeat the full order
+  product list as `remaining_items` for a completely unshipped order.
+- Include `shipments` only when fulfillment records exist. Omit an empty
+  `shipments` collection. A shipment can still have an empty tracking list when
+  tracking is not available.
+- Omitted optional fields remain omitted in both the internal service dictionary
+  and HTTP response; response-model defaults must not add empty lists back.
+
+Example for an order awaiting payment:
+
+```json
+{
+  "success": true,
+  "message": "Your order #1542 containing 1 Cleanser and 1 FaceWash is awaiting payment.",
+  "order_number": "#1542",
+  "status": "awaiting_payment"
+}
+```
+
+An order with no active items has no item phrase in the header.
 No matching order returns a formatted 404 message, not an empty successful result.
 
 ## Natural-language rules
@@ -167,7 +189,7 @@ coverage; fulfillment/payment/hold/scheduled state; otherwise processing.
 - Full shipped/delivered coverage is checked per physical line-item ID and quantity;
   partial shipment messages identify the remaining physical quantities.
 - For mixed digital/physical orders, movement messages explicitly describe only
-  physical items. The structured items list still includes digital items.
+  physical items. Digital items are not incorrectly described as shipped.
 - Pickup status appears on the relevant shipment and is not described as shipping.
 - Cancelled order messages omit shipment/tracking prose.
 - Missing tracking says information is not yet available for moving shipments;

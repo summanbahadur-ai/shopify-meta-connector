@@ -95,9 +95,8 @@ class OrderStatusResponse(BaseModel):
     message: str
     order_number: str
     status: str
-    items: list[OrderItem]
-    remaining_items: list[OrderItem]
-    shipments: list[Shipment]
+    remaining_items: list[OrderItem] = Field(default_factory=list)
+    shipments: list[Shipment] = Field(default_factory=list)
 
 
 class OrderInputIssue(BaseModel):

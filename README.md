@@ -165,7 +165,7 @@ Expected shape:
 | GET | `/api/v1/shopify/shop` | Store metadata |
 | GET | `/api/v1/shopify/products` | Paginated products |
 | GET | `/api/v1/shopify/products/export.csv` | Download complete product catalog as CSV |
-| GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message, items, and shipments |
+| GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message and relevant shipment details |
 | GET | `/api/v1/shopify/policies` | Store legal policies |
 | GET | `/api/v1/shopify/pages` | Shopify content pages |
 | GET | `/api/v1/shopify/faq` | Search pages for FAQ content |

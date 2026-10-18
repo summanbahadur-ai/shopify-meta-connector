@@ -119,7 +119,8 @@ def test_route_returns_formatted_order_without_customer_data(api):
     assert body["order_number"] == "#1001"
     assert body["status"] == "processing"
     assert "being processed" in body["message"]
-    assert body["items"] == [{"title": "Blue Shirt", "quantity": 1}]
+    assert "items" not in body
+    assert "Blue Shirt" in body["message"]
     assert "buyer@example.com" not in response.text
     assert "+14155552671" not in response.text
     assert not script.steps
@@ -276,7 +277,7 @@ async def test_mixed_digital_and_physical_order_does_not_claim_digital_item_ship
     result = await ShopifyService(lookup_script(order)).get_order_status("1001", "buyer@example.com")
     assert result["status"] == "shipped"
     assert "Digital Book" not in result["message"].splitlines()[0]
-    assert result["items"][1]["title"] == "Digital Book"
+    assert "items" not in result
 
 
 @pytest.mark.parametrize("params", [
@@ -428,6 +429,42 @@ async def test_international_email_domain_encodings_match_equivalently(stored_em
     ])
     result = await ShopifyService(script).get_order_status("1001", "buyer@xn--bcher-kva.de")
     assert result["status"] == "processing"
+
+
+@pytest.mark.parametrize("financial_status", ["PENDING", "PAID"])
+def test_unshipped_order_omits_duplicate_remaining_items_and_empty_shipments(api, financial_status):
+    client, script = api
+    script.steps = lookup_script(details(displayFinancialStatus=financial_status)).steps
+    response = client.get("/api/v1/shopify/orders/status", params={
+        "order_number": "1001", "email": "buyer@example.com"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "items" not in body
+    assert "Blue Shirt" in body["message"]
+    assert "remaining_items" not in body
+    assert "shipments" not in body
+
+
+@pytest.mark.asyncio
+async def test_fully_shipped_order_omits_empty_remaining_items():
+    result = await ShopifyService(lookup_script(details(
+        fulfillments=[fulfillment([item()])]))).get_order_status("1001", "buyer@example.com")
+    assert "shipments" in result
+    assert "remaining_items" not in result
+
+
+def test_partial_shipment_keeps_remaining_items_in_http_response(api):
+    client, script = api
+    script.steps = lookup_script(details(
+        [item(quantity=2)], [fulfillment([item()])])).steps
+    response = client.get("/api/v1/shopify/orders/status", params={
+        "order_number": "1001", "email": "buyer@example.com"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "partially_shipped"
+    assert body["remaining_items"] == [{"title": "Blue Shirt", "quantity": 1}]
+    assert body["shipments"][0]["items"] == [{"title": "Blue Shirt", "quantity": 1}]
 
 
 @pytest.mark.parametrize("params,code,phrase", [

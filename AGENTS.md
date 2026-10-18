@@ -241,3 +241,11 @@ limit. Check actual CI output; a local unit test is not proof a deployment succe
 Service contracts should describe the final current behavior directly. Remove
 obsolete behavior instead of retaining it as a history or a completed requested
 change. Use a Requested change section only while a change is actually pending.
+
+Keep service responses focused on the current use case. Do not add speculative
+fields or duplicate data. For order status, include remaining_items only for an
+actual partial shipment, and omit shipments when there are no fulfillment
+records. Update the current contract and tests whenever response fields change.
+
+Order-status responses must not expose a top-level items list. Product details
+can appear in the natural-language message and relevant shipment details.

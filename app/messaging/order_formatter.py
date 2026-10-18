@@ -122,5 +122,11 @@ def format_order_status(order: dict) -> dict:
                     parts.append(DETAIL_MESSAGES["tracking_pending"])
         if status == "partially_shipped" and remaining:
             parts.append(DETAIL_MESSAGES["remaining"].format(items=item_words(remaining)))
-    return OrderStatusResponse(message="\n".join(parts), order_number=order["name"], status=status,
-        items=items, remaining_items=remaining, shipments=shipments).model_dump()
+    details = {}
+    if shipments:
+        details["shipments"] = shipments
+    if status == "partially_shipped" and remaining:
+        details["remaining_items"] = remaining
+    return OrderStatusResponse(success=True, message="\n".join(parts),
+        order_number=order["name"], status=status,
+        **details).model_dump(exclude_unset=True)
