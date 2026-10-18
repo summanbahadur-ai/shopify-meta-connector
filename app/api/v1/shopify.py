@@ -7,10 +7,12 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from app.api.dependencies import get_shopify_service
+from app.api.order_errors import OrderStatusRoute
 from app.services.shopify_service import ShopifyService
-from app.schemas.order_status import OrderLookup, OrderStatusResponse
+from app.schemas.order_status import OrderLookup, OrderLookupErrorResponse, OrderStatusResponse
 
 router = APIRouter(prefix="/shopify", tags=["Shopify"])
+order_router = APIRouter(route_class=OrderStatusRoute)
 
 
 @router.get("/connection")
@@ -63,7 +65,9 @@ def get_order_status_service(request: Request,
     return get_shopify_service(request)
 
 
-@router.get("/orders/status", response_model=OrderStatusResponse)
+@order_router.get("/orders/status", response_model=OrderStatusResponse,
+                  responses={status: {"model": OrderLookupErrorResponse}
+                             for status in (404, 409, 422, 500, 502, 503)})
 async def order_status(lookup: OrderLookup = Depends(order_lookup_input),
                        service: ShopifyService = Depends(get_order_status_service)):
     order = await service.get_order_status(lookup.order_number, lookup.email, lookup.phone)
@@ -85,3 +89,6 @@ async def pages(limit: int = Query(50, ge=1, le=100), after: str | None = None, 
 @router.get("/faq")
 async def faq(service: ShopifyService = Depends(get_shopify_service)):
     return await service.get_pages(limit=50, query="title:FAQ OR handle:faq")
+
+
+router.include_router(order_router)

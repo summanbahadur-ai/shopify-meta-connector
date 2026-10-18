@@ -67,3 +67,17 @@ DETAIL_MESSAGES = {
     "tracking_url": "Track it here: {url}",
     "tracking_pending": "Tracking information is not yet available.",
 }
+
+# Stable codes let a chatbot branch without parsing customer-facing prose.
+LOOKUP_ERROR_MESSAGES = {
+    "missing_order_number": "Please enter your order number, for example #1001.",
+    "missing_email": "Please enter the email address you used when placing the order.",
+    "invalid_order_number": "Please enter a valid order number, for example #1001.",
+    "invalid_email": "Please enter a valid email address, for example name@example.com.",
+    "invalid_phone": "Please enter a valid phone number including its country code, for example +14155552671.",
+    "invalid_input": "Please check your order number, email address, and phone number and try again.",
+    "order_not_found": "We couldn't find an order matching those details. Please check your order number, the email used at checkout, and your phone number if provided, then try again.",
+    "multiple_orders": "More than one order matches those details. Please contact the store with your order number for help.",
+    "lookup_limit": "We couldn't complete your order lookup right now. Please try again shortly or contact the store for help.",
+    "service_unavailable": "We couldn't check your order right now. Please try again shortly.",
+}

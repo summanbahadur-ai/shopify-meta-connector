@@ -104,6 +104,9 @@ def test_invalid_lookup_never_calls_shopify(api, params):
     client, script = api
     response = client.get("/api/v1/shopify/orders/status", params=params)
     assert response.status_code == 422
+    assert response.json()["success"] is False
+    assert response.json()["message"]
+    assert "detail" not in response.json()
     assert not script.calls
 
 
@@ -158,7 +161,7 @@ def test_duplicate_order_names_on_later_page_are_not_guessed(api):
     ]
     response = client.get("/api/v1/shopify/orders/status", params={"order_number": "1001", "email": "buyer@example.com"})
     assert response.status_code == 409
-    assert "order number" in response.json()["detail"].lower()
+    assert "order number" in response.json()["message"].lower()
     assert "#1001" not in response.text
 
 
@@ -425,3 +428,79 @@ async def test_international_email_domain_encodings_match_equivalently(stored_em
     ])
     result = await ShopifyService(script).get_order_status("1001", "buyer@xn--bcher-kva.de")
     assert result["status"] == "processing"
+
+
+@pytest.mark.parametrize("params,code,phrase", [
+    ({"email": "buyer@example.com"}, "missing_order_number", "order number"),
+    ({"order_number": "1001"}, "missing_email", "email"),
+    ({"order_number": "#", "email": "buyer@example.com"}, "invalid_order_number", "valid order number"),
+    ({"order_number": "1001", "email": "bad"}, "invalid_email", "valid email"),
+    ({"order_number": "1001", "email": "buyer@example.com", "phone": "bad"}, "invalid_phone", "country code"),
+])
+def test_validation_returns_customer_message_without_exception_details(api, params, code, phrase):
+    client, script = api
+    response = client.get("/api/v1/shopify/orders/status", params=params)
+    assert response.status_code == 422
+    body = response.json()
+    assert body["success"] is False
+    assert body["code"] == code
+    assert phrase in body["message"].lower()
+    assert body["errors"][0]["code"] == code
+    assert "detail" not in body
+    assert not script.calls
+
+
+def test_not_found_returns_helpful_contact_neutral_message(api):
+    client, script = api
+    script.steps = [("OrderLookup", {"first": 50, "after": None,
+        "query": 'name:"#1001" AND email:"buyer@example.com"', "includePhone": False},
+        {"orders": connection([])})]
+    response = client.get("/api/v1/shopify/orders/status", params={
+        "order_number": "1001", "email": "buyer@example.com"})
+    assert response.status_code == 404
+    assert response.json()["code"] == "order_not_found"
+    assert "check" in response.json()["message"].lower()
+    assert "buyer@example.com" not in response.text
+    assert "detail" not in response.json()
+
+
+@pytest.mark.parametrize("error_type", ["authentication", "upstream", "unexpected", "configuration"])
+def test_service_failures_never_expose_internal_exception(api, error_type, caplog):
+    from app.core.config import ConfigurationError
+    from app.core.exceptions import ShopifyAPIError, ShopifyAuthenticationError
+
+    client, _ = api
+    exceptions = {"authentication": ShopifyAuthenticationError, "upstream": ShopifyAPIError,
+                  "unexpected": RuntimeError, "configuration": ConfigurationError}
+
+    class BrokenService:
+        async def get_order_status(self, *args):
+            raise exceptions[error_type]("PRIVATE_TOKEN customer@example.com INTERNAL_TRACE")
+
+    app.dependency_overrides[get_order_status_service] = lambda: BrokenService()
+    response = client.get("/api/v1/shopify/orders/status", params={
+        "order_number": "1001", "email": "buyer@example.com"})
+    assert response.status_code == (502 if error_type in {"authentication", "upstream"} else 500)
+    assert response.json()["code"] == "service_unavailable"
+    assert "try again" in response.json()["message"].lower()
+    assert "PRIVATE_TOKEN" not in response.text
+    assert "INTERNAL_TRACE" not in response.text
+    assert "customer@example.com" not in response.text
+    assert "PRIVATE_TOKEN" not in caplog.text
+    assert "INTERNAL_TRACE" not in caplog.text
+    assert "customer@example.com" not in caplog.text
+
+
+def test_settings_failure_is_handled_before_route_body(monkeypatch):
+    from app.core.config import ConfigurationError
+
+    def broken_settings(request):
+        raise ConfigurationError("PRIVATE_SETTING_NAME")
+
+    monkeypatch.setattr("app.api.v1.shopify.get_shopify_service", broken_settings)
+    with TestClient(app) as client:
+        response = client.get("/api/v1/shopify/orders/status", params={
+            "order_number": "1001", "email": "buyer@example.com"})
+    assert response.status_code == 500
+    assert response.json()["message"]
+    assert "PRIVATE_SETTING_NAME" not in response.text

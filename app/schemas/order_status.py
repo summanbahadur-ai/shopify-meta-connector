@@ -1,10 +1,11 @@
 """Validated lookup inputs and the public, customer-data-free response."""
 
 import re
+from typing import Literal
 
 import phonenumbers
 from email_validator import EmailNotValidError, validate_email
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 def normalize_phone(value: str) -> str:
@@ -90,9 +91,23 @@ class Shipment(BaseModel):
 
 
 class OrderStatusResponse(BaseModel):
+    success: Literal[True] = True
     message: str
     order_number: str
     status: str
     items: list[OrderItem]
     remaining_items: list[OrderItem]
     shipments: list[Shipment]
+
+
+class OrderInputIssue(BaseModel):
+    field: str
+    code: str
+    message: str
+
+
+class OrderLookupErrorResponse(BaseModel):
+    success: Literal[False] = False
+    code: str
+    message: str
+    errors: list[OrderInputIssue] = Field(default_factory=list)
