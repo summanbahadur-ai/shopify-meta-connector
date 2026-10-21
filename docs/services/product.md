@@ -94,6 +94,11 @@ Swagger/OpenAPI documents inputs, response models, API-key security, and errors.
 - Deduplicate by GID, preserving the first link's label, URL, tags, and position.
   A later unfiltered duplicate never overrides an earlier tagged link.
 - Keep the menu item's customer-facing title, even when Shopify's collection title differs.
+- GET `/products/collections` returns at most the first 10 unique valid collections
+  in depth-first menu order, fitting a WhatsApp interactive list. `total` is the
+  number returned (0?10); there is no collection-list pagination.
+- Product access checks still use the full configured menu, including collections
+  beyond the 10 displayed options, and preserve all tag restrictions.
 - Never query all Shopify collections to discover menu options.
 - Preserve menu tags. Every tag on the first link must occur in product `tags`
   (case-insensitive exact tag matching, AND semantics). Filtering occurs locally

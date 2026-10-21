@@ -448,3 +448,18 @@ async def test_confirmed_pkr_uses_rupee_label_in_message():
         p["priceRangeV2"][key]["currencyCode"] = "PKR"
     r = await service(menu([link()]), {"product": p}, {"product": {"inCollection": True}}).product_details(P, C)
     assert r.currency == "PKR" and "Price: Rs. 10" in r.whatsapp_message
+
+@pytest.mark.parametrize("count", [0, 4, 10, 13])
+async def test_collection_list_is_capped_for_whatsapp(count):
+    links = [link(f"gid://shopify/Collection/{i}", f"Collection {i}") for i in range(1, count + 1)]
+    # Duplicates and nested links still preserve depth-first unique menu order.
+    items = [link(), {"type": "PAGE", "items": links}] if count else []
+    result = await service(menu(items)).collections()
+    assert [c.id for c in result.collections] == [f"gid://shopify/Collection/{i}" for i in range(1, min(count, 10) + 1)]
+    assert result.total == min(count, 10)
+
+
+async def test_collection_beyond_display_limit_remains_menu_authorized():
+    links = [link(f"gid://shopify/Collection/{i}") for i in range(1, 12)]
+    result = await service(menu(links), page([product()])).collection_products("11")
+    assert len(result.products) == 1

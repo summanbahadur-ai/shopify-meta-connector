@@ -15,6 +15,7 @@ from app.schemas.product_browsing import (
     Pagination, CollectionProducts, ProductDetails, ProductVariant,
 )
 
+MAX_MENU_COLLECTIONS = 10
 MAX_COLLECTION_PAGES = 10
 MAX_VARIANT_PAGES = 20  # 1,000 variants, including the first page
 MAX_MEMBERSHIP_PAGES = 20
@@ -124,6 +125,11 @@ class ProductBrowsingService:
         product["variants"] = {"nodes": variants, "pageInfo": {"hasNextPage": after is not None, "endCursor": after}}
 
     async def collections(self) -> MenuCollections:
+        menu = await self._menu_collections()
+        displayed = menu.collections[:MAX_MENU_COLLECTIONS]
+        return menu.model_copy(update={"collections": displayed, "total": len(displayed)})
+
+    async def _menu_collections(self) -> MenuCollections:
         data = await self.client.query_with_retry(MENU_QUERY, {"menuId": PRODUCT_MENU_ID})
         menu = data.get("menu")
         if menu is None:
@@ -145,7 +151,7 @@ class ProductBrowsingService:
         collection_id = canonical_id(collection_id, "Collection")
         if not 1 <= limit <= 50:
             raise BrowsingError(422, "invalid_limit", "Limit must be between 1 and 50.")
-        allowed = {c.id: c for c in (await self.collections()).collections}
+        allowed = {c.id: c for c in (await self._menu_collections()).collections}
         if collection_id not in allowed:
             raise _not_found()
         selection = allowed[collection_id]
@@ -196,7 +202,7 @@ class ProductBrowsingService:
     async def product_details(self, product_id: str, collection_id: str | None = None) -> ProductDetails:
         product_id = canonical_id(product_id, "Product")
         context = canonical_id(collection_id, "Collection") if collection_id else None
-        allowed = (await self.collections()).collections
+        allowed = (await self._menu_collections()).collections
         if context and context not in {c.id for c in allowed}:
             raise _not_found()
         data = await self.client.query_with_retry(PRODUCT_DETAILS_QUERY, {"productId": product_id})

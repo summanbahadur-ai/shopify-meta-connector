@@ -162,7 +162,7 @@ Expected shape:
 | GET | `/` | Service information |
 | GET | `/health` | Liveness check |
 | GET | `/api/v1/shopify/connection` | Verify Shopify authentication/API connection |
-| GET | `/api/v1/shopify/products/collections` | Collections from the configured menu (X-API-Key required) |
+| GET | `/api/v1/shopify/products/collections` | Up to 10 collections from the configured menu (X-API-Key required) |
 | GET | `/api/v1/shopify/products/collections/{collection_id}/products` | Active, published products with full descriptions and a single default price |
 | GET | `/api/v1/shopify/products/{product_id}` | Full product details and WhatsApp message |
 | GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message and relevant shipment details |
