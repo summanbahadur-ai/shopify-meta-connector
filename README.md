@@ -7,13 +7,13 @@ A scalable FastAPI service that connects one Shopify store to a backend API. Thi
 - FastAPI application with versioned REST endpoints.
 - Shopify GraphQL Admin API client.
 - Current Shopify client-credentials authentication with automatic 24-hour token renewal.
-- Shop connection test and shop metadata.
-- Product catalog retrieval with cursor pagination.
-- Product catalog CSV download.
+- Shop connection test.
+- Menu-scoped active product browsing with cursor pagination, full descriptions, and one default selling price.
+- Menu-based WhatsApp product browsing with API-key protection; see [product contract](docs/services/product.md) for setup, scopes, endpoints, and WhatChimp mapping.
 - Validated order-status lookup by required order number and email, with optional phone.
 - Deterministic customer-friendly order messages with items and tracking (no LLM).
 - Shopify legal policies.
-- Shopify content pages and FAQ lookup.
+- Shopify FAQ lookup.
 - Cloudflare Python Workers entrypoint and configuration.
 - PyCharm/local Uvicorn support.
 - Automated tests.
@@ -162,29 +162,23 @@ Expected shape:
 | GET | `/` | Service information |
 | GET | `/health` | Liveness check |
 | GET | `/api/v1/shopify/connection` | Verify Shopify authentication/API connection |
-| GET | `/api/v1/shopify/shop` | Store metadata |
-| GET | `/api/v1/shopify/products` | Paginated products |
-| GET | `/api/v1/shopify/products/export.csv` | Download complete product catalog as CSV |
+| GET | `/api/v1/shopify/products/collections` | Collections from the configured menu (X-API-Key required) |
+| GET | `/api/v1/shopify/products/collections/{collection_id}/products` | Active, published products with full descriptions and a single default price |
+| GET | `/api/v1/shopify/products/{product_id}` | Full product details and WhatsApp message |
 | GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message and relevant shipment details |
 | GET | `/api/v1/shopify/policies` | Store legal policies |
-| GET | `/api/v1/shopify/pages` | Shopify content pages |
 | GET | `/api/v1/shopify/faq` | Search pages for FAQ content |
 
 ### Pagination
 
-Products and pages expose Shopify's cursor-based pagination. Example:
+Menu-based products expose cursor pagination:
 
 ```text
-GET /api/v1/shopify/products?limit=50
+GET /api/v1/shopify/products/collections/111/products?limit=10
+GET /api/v1/shopify/products/collections/111/products?limit=10&cursor=<next_cursor>
 ```
 
-The response contains `page_info.endCursor`. Pass it back as:
-
-```text
-GET /api/v1/shopify/products?limit=50&after=<cursor>
-```
-
-The CSV catalog endpoint follows all product cursors automatically.
+Send X-API-Key and follow `pagination.next_cursor` while `has_next_page` is true.
 
 ## Important order-status security note
 

@@ -8,10 +8,10 @@ by purpose. They do not imply separate deployed services.
 | File | Describes |
 | --- | --- |
 | [shared.md](shared.md) | Settings, Shopify authentication, HTTP calls, errors |
-| [shop.md](shop.md) | Connection test and store details |
-| [products.md](products.md) | Product listing and CSV download |
+| [shop.md](shop.md) | Connection test |
+| [product.md](product.md) | Menu-based WhatsApp browsing, visibility, authentication, and messages |
 | [orders.md](orders.md) | Validated order-status lookup and natural-language messages |
-| [content.md](content.md) | Policies, pages, and FAQ search |
+| [content.md](content.md) | Policies and FAQ search |
 | [template.md](template.md) | Starting point for a new operation |
 
 ## How you use these files
@@ -21,7 +21,7 @@ by purpose. They do not imply separate deployed services.
    returned fields, rules, and an example of the result you want.
 3. Save the file and ask your coding agent:
 
-   > Implement the Requested change in docs/services/products.md. Read
+   > Implement the Requested change in docs/services/product.md. Read
    > AGENTS.md and docs/services/README.md first. Compare the contract with
    > the current code, implement the change, and run relevant tests. Update
    > the contract to describe the final behavior and report any remaining gaps.

@@ -43,10 +43,13 @@ jobs:
           SHOPIFY_STORE_DOMAIN: ${{ secrets.SHOPIFY_STORE_DOMAIN }}
           SHOPIFY_CLIENT_ID: ${{ secrets.SHOPIFY_CLIENT_ID }}
           SHOPIFY_CLIENT_SECRET: ${{ secrets.SHOPIFY_CLIENT_SECRET }}
+          PRODUCT_BROWSING_API_KEY: ${{ secrets.PRODUCT_BROWSING_API_KEY }}
         run: |
+          test -n "$PRODUCT_BROWSING_API_KEY" || { echo "Add the PRODUCT_BROWSING_API_KEY GitHub Actions secret before deploying."; exit 1; }
           echo "$SHOPIFY_STORE_DOMAIN" | uv run pywrangler secret put SHOPIFY_STORE_DOMAIN
           echo "$SHOPIFY_CLIENT_ID" | uv run pywrangler secret put SHOPIFY_CLIENT_ID
           echo "$SHOPIFY_CLIENT_SECRET" | uv run pywrangler secret put SHOPIFY_CLIENT_SECRET
+          echo "$PRODUCT_BROWSING_API_KEY" | uv run pywrangler secret put PRODUCT_BROWSING_API_KEY
 
       - name: Deploy to Cloudflare
         env:

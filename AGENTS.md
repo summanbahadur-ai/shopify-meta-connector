@@ -105,6 +105,7 @@ Use these exact names:
 | `SHOPIFY_STORE_DOMAIN` | Your store domain, such as `your-store.myshopify.com` |
 | `SHOPIFY_CLIENT_ID` | Your Shopify app's client ID |
 | `SHOPIFY_CLIENT_SECRET` | Your Shopify app's client secret |
+| `PRODUCT_BROWSING_API_KEY` | A long random secret shared only with the bot's backend HTTP integration |
 
 **To change only the Cloudflare account, replace the first two secrets.**
 Keep the three Shopify secrets if you are still using the same Shopify store and app.
@@ -249,3 +250,16 @@ records. Update the current contract and tests whenever response fields change.
 
 Order-status responses must not expose a top-level items list. Product details
 can appear in the natural-language message and relevant shipment details.
+
+For menu-based WhatsApp product browsing read `docs/services/product.md`.
+Keep the configured menu allowlist and tag filters enforced in the service for
+both listing and details. New browsing routes require X-API-Key; never expose
+Admin tokens to WhatChimp. Keep product wording in `app/messaging/product_messages.py`
+and deterministic formatting/sanitization in `product_formatter.py`. Do not use
+an LLM, invent product claims, or infer discounts from unrelated variants.
+Product browsing returns the full sanitized Shopify description in lists and
+details, including the full description in the WhatsApp message. Return one
+decimal-string price and separate currency, using the first available variant
+(first variant if all are sold out), with its own compare-at price. Keep only
+ACTIVE, Online Store-published products in customer lists. Do not reintroduce
+the unrestricted GET /api/v1/shopify/products endpoint.

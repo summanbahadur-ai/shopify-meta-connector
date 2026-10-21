@@ -22,7 +22,8 @@
     "required": [
       "SHOPIFY_STORE_DOMAIN",
       "SHOPIFY_CLIENT_ID",
-      "SHOPIFY_CLIENT_SECRET"
+      "SHOPIFY_CLIENT_SECRET",
+      "PRODUCT_BROWSING_API_KEY"
     ]
   },
   "base_dir": ".cache/worker-source",

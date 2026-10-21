@@ -18,21 +18,6 @@ query ShopConnection {
 }
 """
 
-PRODUCTS_QUERY = """
-query Products($first: Int!, $after: String) {
-  products(first: $first, after: $after) {
-    nodes {
-      id title handle descriptionHtml vendor productType status tags
-      featuredMedia { preview { image { url altText } } }
-      variants(first: 100) {
-        nodes { id title sku barcode price compareAtPrice }
-      }
-    }
-    pageInfo { hasNextPage endCursor }
-  }
-}
-"""
-
 POLICIES_QUERY = """
 query Policies {
   shop {
@@ -58,24 +43,6 @@ class ShopifyService:
     async def get_connection_status(self) -> dict[str, Any]:
         data = await self.client.query(SHOP_QUERY)
         return {"connected": True, "shop": data["shop"]}
-
-    async def get_shop(self) -> dict[str, Any]:
-        return (await self.client.query(SHOP_QUERY))["shop"]
-
-    async def get_products(self, limit: int = 50, after: str | None = None) -> dict[str, Any]:
-        first = min(max(limit, 1), 100)
-        connection = (await self.client.query(PRODUCTS_QUERY, {"first": first, "after": after}))["products"]
-        return {"count": len(connection["nodes"]), "products": connection["nodes"], "page_info": connection["pageInfo"]}
-
-    async def get_all_products(self) -> list[dict[str, Any]]:
-        products: list[dict[str, Any]] = []
-        after = None
-        while True:
-            page = await self.get_products(limit=100, after=after)
-            products.extend(page["products"])
-            if not page["page_info"]["hasNextPage"]:
-                return products
-            after = page["page_info"]["endCursor"]
 
     async def get_order_status(self, order_number: str, email: str,
                                phone: str | None = None) -> dict[str, Any] | None:

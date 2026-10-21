@@ -1,4 +1,4 @@
-# Policies, pages, and FAQ
+# Policies and FAQ
 
 ## Purpose and implementation
 
@@ -21,13 +21,14 @@ Service returns the policy list; HTTP route wraps it in
 `{"policies": [<policy objects>]}` with HTTP 200. Empty list becomes
 `{"policies": []}`. HTML in `body` is returned unchanged.
 
-## Pages
+## Internal page lookup
 
-GET `/api/v1/shopify/pages` -> `get_pages(limit=50, after=None, query=None)`.
+`get_pages(limit=50, after=None, query=None)` supports FAQ search internally;
+it has no general-purpose public endpoint.
 
-| Query input | Default | Rule |
+| Service input | Default | Rule |
 | --- | --- | --- |
-| `limit` | 50 | Integer 1..100; invalid values return HTTP 422 |
+| `limit` | 50 | Integer clamped to 1..100 |
 | `after` | null | Optional Shopify cursor |
 | `query` | null | Optional Shopify search string, forwarded unchanged |
 
@@ -41,8 +42,7 @@ pages {
 }
 ```
 
-Upstream data has `pages.nodes` and `pages.pageInfo`. Service and HTTP 200
-response use `{"count": <page size>, "pages": [<page objects>],
+Upstream data has `pages.nodes` and `pages.pageInfo`. The service returns `{"count": <page size>, "pages": [<page objects>],
 "page_info": {"hasNextPage": <boolean>, "endCursor": <cursor or null>}}`.
 Empty results return count 0 and pages []. HTML and published flags are passed
 through; the service does not filter unpublished results itself.
@@ -52,7 +52,7 @@ through; the service does not filter unpublished results itself.
 GET `/api/v1/shopify/faq` accepts no query parameters. There is no separate
 FAQ service method; the route calls
 `get_pages(limit=50, query="title:FAQ OR handle:faq")` with no cursor.
-The Shopify operation and returned shape are exactly the Pages behavior above.
+The Shopify operation and HTTP 200 response use the internal page lookup shape above.
 
 FAQ is a page search, not an AI answer or a structured question/answer parser.
 It returns only the first page of matches. All operations use shared errors.
@@ -63,6 +63,3 @@ Check policy HTTP wrapping versus service return value, page fields, cursor
 and query forwarding, empty results, and the exact FAQ search variables.
 Existing tests cover basic service counts, not HTTP wrappers or FAQ behavior.
 
-## Requested change
-
-None pending.

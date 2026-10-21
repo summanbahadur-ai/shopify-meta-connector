@@ -1,8 +1,8 @@
-# Shop details and connection test
+# Shopify connection test
 
 ## Purpose and implementation
 
-Verify Shopify connectivity and read store metadata.
+Verify Shopify connectivity, including store metadata in the connection result.
 Routes: `app/api/v1/shopify.py`; methods and `SHOP_QUERY`:
 `app/services/shopify_service.py`. Shared calls/errors: [shared.md](shared.md).
 Existing basic connection test: `tests/test_shopify_service.py::test_connection`.
@@ -12,9 +12,8 @@ Existing basic connection test: `tests/test_shopify_service.py::test_connection`
 | Public GET endpoint | Service method | Input |
 | --- | --- | --- |
 | `/api/v1/shopify/connection` | `get_connection_status()` | No query parameters |
-| `/api/v1/shopify/shop` | `get_shop()` | No query parameters |
 
-Both use the configured store credentials and call the Shopify GraphQL
+The connection check uses the configured store credentials and calls the Shopify GraphQL
 `ShopConnection` operation, with no variables. It selects:
 
 ```text
@@ -25,7 +24,6 @@ shop { name myshopifyDomain primaryDomain { host url }
 ## Upstream and returned responses
 
 Upstream data is `{"shop": {<selected fields>}}`.
-`get_shop()` and `/shop` return that inner shop object unchanged.
 `get_connection_status()` and `/connection` return:
 
 ```json
@@ -47,9 +45,6 @@ and does not make this Shopify call.
 
 ## Acceptance checks for changes
 
-Verify both response shapes, the selected Shopify fields, and authentication
+Verify the connection response shape, the selected Shopify fields, and authentication
 failure behavior. The existing fake-client test covers only part of the payload.
 
-## Requested change
-
-None pending.
