@@ -38,7 +38,7 @@ query GetCollectionProducts($collectionId: ID!, $first: Int!, $after: String) {
       edges { cursor node {
 """ + PRODUCT_FIELDS + """
         variants(first: 50) {
-          nodes { price compareAtPrice availableForSale }
+          nodes { id price compareAtPrice availableForSale }
           pageInfo { hasNextPage endCursor }
         }
       } }

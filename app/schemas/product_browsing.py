@@ -36,6 +36,7 @@ class MenuCollections(BaseModel):
 
 class ProductSummary(BaseModel):
     id: str
+    variant_id: str
     title: str
     handle: str
     image_url: str | None = None

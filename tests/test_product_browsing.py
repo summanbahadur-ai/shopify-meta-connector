@@ -50,7 +50,7 @@ async def test_menu_order_nesting_duplicates_and_labels():
                       link(title="Duplicate"), {"type": "PRODUCT", "resourceId": P}, link("bad")]))
     result = await s.collections()
     assert [x.title for x in result.collections] == ["Menu label", "Second"]
-    assert [x.id for x in result.collections] == [C, "gid://shopify/Collection/4"]
+    assert [x.id for x in result.collections] == ["1", "4"]
     assert result.total == 2
 
 
@@ -219,7 +219,7 @@ def test_collection_route_response_schema():
     try:
         r = TestClient(app).get("/api/v1/shopify/products/collections")
         assert r.status_code == 200
-        assert r.json()["collections"][0] == {"id": C, "title": "Menu label", "url": "/collections/test", "tags": ["Face"]}
+        assert r.json()["collections"][0] == {"id": "1", "title": "Menu label", "url": "/collections/test", "tags": ["Face"]}
     finally:
         app.dependency_overrides.clear()
 
@@ -470,7 +470,7 @@ async def test_collection_pages_and_more(count):
         assert len(result.collections) == 10
         assert result.collections[-1].model_dump() == {"id": f"PAGE:{page_number + 1}", "title": "More Categories ?"}
         page_number = int(result.collections[-1].id.split(":")[1])
-    assert seen == [f"gid://shopify/Collection/{i}" for i in range(1, count + 1)]
+    assert seen == [str(i) for i in range(1, count + 1)]
     beyond = await s.collections(page=page_number + 1)
     assert beyond.collections == [] and beyond.has_next is False
 
@@ -488,3 +488,19 @@ async def test_collection_beyond_display_limit_remains_menu_authorized():
     links = [link(f"gid://shopify/Collection/{i}") for i in range(1, 12)]
     result = await service(menu(links), page([product()])).collection_products("11")
     assert len(result.products) == 1
+
+@pytest.mark.parametrize("later_page", [False, True])
+async def test_listing_returns_real_selected_variant_id(later_page):
+    p = product()
+    p["variants"]["nodes"][0]["availableForSale"] = False
+    selected = dict(p["variants"]["nodes"][0], id="gid://shopify/ProductVariant/987654321", availableForSale=True, price="12.50")
+    responses = [menu([link()])]
+    if later_page:
+        p["variants"]["pageInfo"] = {"hasNextPage": True, "endCursor": "v1"}
+        responses += [page([p]), {"product": {"variants": {"nodes": [selected], "pageInfo": {"hasNextPage": False}}}}]
+    else:
+        p["variants"]["nodes"].append(selected)
+        responses += [page([p])]
+    result = (await service(*responses).collection_products(C)).products[0]
+    assert result.variant_id == "gid://shopify/ProductVariant/987654321"
+    assert result.price == "12.50"

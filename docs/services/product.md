@@ -72,7 +72,8 @@ Logs contain error categories only, never credentials or upstream error text.
 
 All paths below have prefix `/api/v1/shopify`. All require `X-API-Key`.
 IDs accept a positive numeric Shopify resource ID or the matching Shopify GID;
-responses always use GIDs. Wrong resource types, malformed IDs, and zero/negative
+The collections-list response uses numeric ID strings for real collection rows
+and `PAGE:<number>` for navigation rows. Other resource responses use GIDs. Wrong resource types, malformed IDs, and zero/negative
 IDs return 422. Use query aliases for GIDs to avoid slash encoding problems.
 
 | Method and path | Inputs | Response model |
@@ -134,6 +135,11 @@ There is no nested min/max price payload. The display price comes from the first
 available variant in Shopify's default variant order, falling back to the first
 variant only when all are unavailable. This follows the standard default product
 selection documented by [Shopify Liquid](https://shopify.dev/docs/api/liquid/objects/product#product-selected_or_first_available_variant).
+`variant_id` is the real Shopify ProductVariant GID of that selected variant
+(e.g. `gid://shopify/ProductVariant/444`), returned alongside its selling price
+for downstream ordering. It is read from Shopify, never derived from a product ID.
+If all variants are sold out, it identifies the first variant used for pricing;
+it does not guarantee availability or place an order.
 `compare_at_price` comes from that same variant and is returned only if strictly
 higher than its selling price; `on_sale` reflects that comparison. Other variant
 prices remain in details. Values never use binary floating point.
@@ -181,7 +187,7 @@ X-API-Key: YOUR_BACKEND_KEY
   "menu_id": "gid://shopify/Menu/235088314461",
   "menu_title": "Shop",
   "total": 1,
-  "collections": [{"id": "gid://shopify/Collection/111", "title": "Hair Care", "url": "/collections/hair-care", "tags": []}],
+  "collections": [{"id": "111", "title": "Hair Care", "url": "/collections/hair-care", "tags": []}],
   "page": 1,
   "has_next": false
 }
@@ -198,7 +204,7 @@ X-API-Key: YOUR_BACKEND_KEY
   "collection_id": "gid://shopify/Collection/111",
   "collection_title": "Hair Care",
   "products": [{
-    "id": "gid://shopify/Product/333", "title": "Conditioner", "handle": "conditioner",
+    "id": "gid://shopify/Product/333", "variant_id": "gid://shopify/ProductVariant/444", "title": "Conditioner", "handle": "conditioner",
     "image_url": null, "image_alt": null,
     "description": "Description from Shopify.",
     "price": "10.00", "currency": "USD",
@@ -217,7 +223,7 @@ X-API-Key: YOUR_BACKEND_KEY
 
 ```json
 {
-  "id": "gid://shopify/Product/333", "title": "Conditioner", "handle": "conditioner",
+  "id": "gid://shopify/Product/333", "variant_id": "gid://shopify/ProductVariant/444", "title": "Conditioner", "handle": "conditioner",
   "image_url": null, "image_alt": null,
   "description": "Description from Shopify.",
     "price": "10.00", "currency": "USD",
@@ -340,7 +346,7 @@ query GetCollectionProducts($collectionId: ID!, $first: Int!, $after: String) {
   }
 
         variants(first: 50) {
-          nodes { price compareAtPrice availableForSale }
+          nodes { id price compareAtPrice availableForSale }
           pageInfo { hasNextPage endCursor }
         }
       } }
@@ -422,7 +428,7 @@ last (tenth) row. Do not append another navigation row.
 When the selected ID starts with `PAGE:`, extract its positive integer suffix
 (e.g. `PAGE:2` means page 2) and call
 `/api/v1/shopify/products/collections?page=2` with the same X-API-Key. Replace the
-list with the new response. Otherwise pass the selected Shopify collection GID
+list with the new response. Otherwise pass the selected numeric Shopify collection ID
 to the collection-products endpoint. Navigation IDs are not collection IDs and
 are rejected by product lookup validation. Reset to page 1 when restarting.
 

@@ -94,7 +94,7 @@ def _summary(product: dict) -> ProductSummary:
     if not comparison or _decimal(comparison) <= _decimal(selling):
         comparison = None
     return ProductSummary(
-        id=product["id"], title=product["title"], handle=product["handle"],
+        id=product["id"], variant_id=selected["id"], title=product["title"], handle=product["handle"],
         image_url=_url(image.get("url"), image=True), image_alt=image.get("altText"),
         description=clean_description(product.get("description", ""), product.get("descriptionHtml", "")),
         price=selling, currency=low["currencyCode"],
@@ -130,7 +130,8 @@ class ProductBrowsingService:
             raise BrowsingError(422, "invalid_page", "Page must be a positive integer.")
         menu = await self._menu_collections()
         start = (page - 1) * COLLECTION_PAGE_SIZE
-        displayed = menu.collections[start:start + COLLECTION_PAGE_SIZE]
+        displayed = [collection.model_copy(update={"id": collection.id.rsplit("/", 1)[-1]})
+                     for collection in menu.collections[start:start + COLLECTION_PAGE_SIZE]]
         has_next = start + len(displayed) < menu.total
         if has_next:
             displayed.append(CollectionNavigation(id=f"PAGE:{page + 1}", title=COLLECTION_MORE_TITLE))
