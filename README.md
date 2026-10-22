@@ -45,25 +45,25 @@ The API, business/service layer, and Shopify transport are deliberately separate
 
 ```text
 shopify-meta-connector/
-├── app/
-│   ├── api/
-│   │   ├── dependencies.py
-│   │   ├── router.py
-│   │   └── v1/shopify.py
-│   ├── clients/shopify_client.py
-│   ├── core/
-│   │   ├── config.py
-│   │   └── exceptions.py
-│   ├── services/shopify_service.py
-│   └── main.py
-├── tests/
-├── worker.py
-├── wrangler.jsonc
-├── pyproject.toml
-├── requirements.txt
-├── .env.example
-├── .dev.vars.example
-└── README.md
+â”œâ”€â”€ app/
+â”‚   â”œâ”€â”€ api/
+â”‚   â”‚   â”œâ”€â”€ dependencies.py
+â”‚   â”‚   â”œâ”€â”€ router.py
+â”‚   â”‚   â””â”€â”€ v1/shopify.py
+â”‚   â”œâ”€â”€ clients/shopify_client.py
+â”‚   â”œâ”€â”€ core/
+â”‚   â”‚   â”œâ”€â”€ config.py
+â”‚   â”‚   â””â”€â”€ exceptions.py
+â”‚   â”œâ”€â”€ services/shopify_service.py
+â”‚   â””â”€â”€ main.py
+â”œâ”€â”€ tests/
+â”œâ”€â”€ worker.py
+â”œâ”€â”€ wrangler.jsonc
+â”œâ”€â”€ pyproject.toml
+â”œâ”€â”€ requirements.txt
+â”œâ”€â”€ .env.example
+â”œâ”€â”€ .dev.vars.example
+â””â”€â”€ README.md
 ```
 
 ## 1. Create the Shopify app
@@ -382,3 +382,11 @@ uv run pywrangler dev
 # Deploy
 uv run pywrangler deploy
 ```
+
+## WhatChimp interactive product cards
+
+POST `/api/whatsapp/product-card` submits one Shopify product as an interactive
+reply-button message. It requires separate WhatChimp credentials and an inbound
+API key. See the [product-card service guide](docs/services/whatsapp-product-card.md)
+for setup, Swagger use, request/response examples, flow mapping, tests, and
+endpoint-specific compatibility checks still needed before production use.

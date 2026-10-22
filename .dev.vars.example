@@ -3,3 +3,9 @@ SHOPIFY_CLIENT_ID=replace_with_dev_dashboard_client_id
 SHOPIFY_CLIENT_SECRET=replace_with_dev_dashboard_client_secret
 SHOPIFY_API_VERSION=2026-07
 PRODUCT_BROWSING_API_KEY=replace_with_a_long_random_secret
+
+# Optional WhatChimp product-card sender
+WHATCHIMP_API_TOKEN=your_whatchimp_api_token_here
+WHATCHIMP_PHONE_NUMBER_ID=your_whatchimp_phone_number_id_here
+WHATCHIMP_API_BASE_URL=https://app.whatchimp.com/api/v1
+WHATCHIMP_INBOUND_API_KEY=replace_with_a_long_random_secret

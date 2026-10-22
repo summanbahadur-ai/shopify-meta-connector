@@ -10,6 +10,7 @@ by purpose. They do not imply separate deployed services.
 | [shared.md](shared.md) | Settings, Shopify authentication, HTTP calls, errors |
 | [shop.md](shop.md) | Connection test |
 | [product.md](product.md) | Menu-based WhatsApp browsing, visibility, authentication, and messages |
+| [whatsapp-product-card.md](whatsapp-product-card.md) | WhatChimp interactive product-card submission |
 | [orders.md](orders.md) | Validated order-status lookup and natural-language messages |
 | [content.md](content.md) | Policies and FAQ search |
 | [template.md](template.md) | Starting point for a new operation |

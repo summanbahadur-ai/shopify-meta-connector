@@ -1,0 +1,7 @@
+DETAILS_TITLE = "View Details"
+ADD_TITLE = "Add to Cart"
+NEXT_TITLE = "Next Product"
+BACK_TITLE = "Back to Categories"
+FOOTER = "Dr Elements"
+PRICE_LABEL = "Price"
+POSITION = "Product {position} of {total}"

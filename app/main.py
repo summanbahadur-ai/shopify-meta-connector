@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
+from app.api.product_card import router as product_card_router
 from app.core.config import ConfigurationError
 from app.core.exceptions import AmbiguousOrderError, OrderLookupLimitError, ShopifyAuthenticationError, ShopifyAPIError
 
@@ -11,6 +12,7 @@ app = FastAPI(
     description="Shopify data API foundation for a future Meta WhatsApp commerce assistant.",
 )
 app.include_router(api_router)
+app.include_router(product_card_router)
 
 
 @app.get("/")

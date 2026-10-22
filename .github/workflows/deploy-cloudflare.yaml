@@ -51,6 +51,23 @@ jobs:
           echo "$SHOPIFY_CLIENT_SECRET" | uv run pywrangler secret put SHOPIFY_CLIENT_SECRET
           echo "$PRODUCT_BROWSING_API_KEY" | uv run pywrangler secret put PRODUCT_BROWSING_API_KEY
 
+      - name: Configure optional WhatChimp secrets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WHATCHIMP_API_TOKEN: ${{ secrets.WHATCHIMP_API_TOKEN }}
+          WHATCHIMP_PHONE_NUMBER_ID: ${{ secrets.WHATCHIMP_PHONE_NUMBER_ID }}
+          WHATCHIMP_INBOUND_API_KEY: ${{ secrets.WHATCHIMP_INBOUND_API_KEY }}
+          WHATCHIMP_API_BASE_URL: ${{ vars.WHATCHIMP_API_BASE_URL }}
+        run: |
+          if [ -n "$WHATCHIMP_API_TOKEN$WHATCHIMP_PHONE_NUMBER_ID$WHATCHIMP_INBOUND_API_KEY" ]; then
+            test -n "$WHATCHIMP_API_TOKEN" && test -n "$WHATCHIMP_PHONE_NUMBER_ID" && test -n "$WHATCHIMP_INBOUND_API_KEY" || { echo "Configure all three WhatChimp secrets together."; exit 1; }
+            printf '%s' "$WHATCHIMP_API_TOKEN" | uv run pywrangler secret put WHATCHIMP_API_TOKEN
+            printf '%s' "$WHATCHIMP_PHONE_NUMBER_ID" | uv run pywrangler secret put WHATCHIMP_PHONE_NUMBER_ID
+            printf '%s' "$WHATCHIMP_INBOUND_API_KEY" | uv run pywrangler secret put WHATCHIMP_INBOUND_API_KEY
+            printf '%s' "${WHATCHIMP_API_BASE_URL:-https://app.whatchimp.com/api/v1}" | uv run pywrangler secret put WHATCHIMP_API_BASE_URL
+          fi
+
       - name: Deploy to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

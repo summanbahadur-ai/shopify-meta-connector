@@ -55,8 +55,8 @@ Send it in the `X-API-Key` header for every browsing request. Do not put it in
 URLs or customer-visible WhatsApp messages. Compare keys in constant time.
 Missing server configuration returns 503; missing/wrong client key returns 401.
 
-For GitHub deployment, add `PRODUCT_BROWSING_API_KEY` in repository Settings →
-Secrets and variables → Actions. The deployment workflow uploads it as a
+For GitHub deployment, add `PRODUCT_BROWSING_API_KEY` in repository Settings â†’
+Secrets and variables â†’ Actions. The deployment workflow uploads it as a
 Cloudflare Worker secret alongside the existing Shopify secrets. `wrangler.jsonc`
 declares it required. Set the same header in WhatChimp's trusted HTTP integration.
 Shopify Admin credentials remain exclusively on the backend. Never send them to
@@ -79,12 +79,12 @@ IDs return 422. Use query aliases for GIDs to avoid slash encoding problems.
 | Method and path | Inputs | Response model |
 | --- | --- | --- |
 | GET `/products/collections` | `page=1` (positive integer) | `MenuCollections` |
-| GET `/products/collections/{collection_id}/products` | `limit=10` (1–50), optional `cursor` | `CollectionProducts` |
+| GET `/products/collections/{collection_id}/products` | `limit=10` (1â€“50), optional `cursor` | `CollectionProducts` |
 | GET `/products/collection-products` | Required `collection_id`; same limit/cursor | Same collection response; recommended for GIDs |
 | GET `/products/{product_id}` | Optional `collection_id` context | `ProductDetails` |
 | GET `/products/details` | Required `product_id`; optional `collection_id` | Same details response; recommended for GIDs |
 
-`cursor` is an opaque Shopify cursor (1–2048 characters); pass it back unchanged.
+`cursor` is an opaque Shopify cursor (1â€“2048 characters); pass it back unchanged.
 Query IDs have a 100-character bound. Do not add `menu_id`: the menu is fixed.
 Swagger/OpenAPI documents inputs, response models, API-key security, and errors.
 
@@ -151,7 +151,7 @@ PKR; other currencies retain their currency code.
 
 Collection responses request up to 10 raw products per Shopify call, each with
 up to 50 variants for default price selection, to bound nested GraphQL cost. Scan
-up to 10 pages to fill the requested 1–50 visible products. Preserve Shopify order.
+up to 10 pages to fill the requested 1â€“50 visible products. Preserve Shopify order.
 The cursor follows the last scanned page, including filtered products; none are
 silently skipped. At the scan limit, return a possibly short/empty page with a
 continuation cursor if Shopify has more data. Clients must follow pagination even
@@ -232,7 +232,7 @@ X-API-Key: YOUR_BACKEND_KEY
   "vendor": "Dr Elements", "product_type": "Conditioner",
   "available": true,
   "variants": [{"id": "gid://shopify/ProductVariant/444", "title": "250ML", "price": "10.00", "compare_at_price": "15.00", "available": true, "selected_options": [{"name": "Size", "value": "250ML"}]}],
-  "whatsapp_message": "Conditioner\n\nPrice: USD 10\n\nOriginal Price: USD 15\n\nDescription:\nDescription from Shopify.\n\nAvailable Options:\n• 250ML: USD 10\n\nView Product:\nhttps://example.com/products/conditioner"
+  "whatsapp_message": "Conditioner\n\nPrice: USD 10\n\nOriginal Price: USD 15\n\nDescription:\nDescription from Shopify.\n\nAvailable Options:\nâ€¢ 250ML: USD 10\n\nView Product:\nhttps://example.com/products/conditioner"
 }
 ```
 
@@ -287,17 +287,17 @@ No upstream exception text, credentials, or internal GraphQL details are exposed
 
 ## WhatChimp integration guide
 
-Step A — Product Information: call GET `/api/v1/shopify/products/collections`.
+Step A â€” Product Information: call GET `/api/v1/shopify/products/collections`.
 Map `collections[].title` to selectable labels and `collections[].id` to stored values.
 
-Step B — Collection Selected: call GET
+Step B â€” Collection Selected: call GET
 `/api/v1/shopify/products/collections/{collection_id}/products` with a numeric ID,
 or use `/products/collection-products?collection_id=ENCODED_GID` (recommended).
 Display `products[].title`, the single `price` with `currency`, and `image_url` where
 supported. Store the selected product ID and collection ID. Implement Next from
 `pagination.next_cursor` whenever `has_next_page` is true.
 
-Step C — Product Selected: call GET `/api/v1/shopify/products/{product_id}` or
+Step C â€” Product Selected: call GET `/api/v1/shopify/products/{product_id}` or
 `/products/details?product_id=ENCODED_GID&collection_id=ENCODED_COLLECTION_GID`.
 Display `whatsapp_message`. Include X-API-Key privately on every HTTP request.
 Map curated error messages to a retry/support response.
@@ -439,3 +439,11 @@ unchanged. The current menu is loaded for each request: edits/reordering can mov
 collections between pages, so restart at page 1 after edits.
 For example, 23 unique collections yield 9 + More, 9 + More, then 5 without More.
 WhatChimp selection routing must be configured separately.
+
+## Interactive WhatChimp product cards
+
+POST `/api/whatsapp/product-card` reuses this browsing service to submit one
+interactive product card, protected by a separate inbound key. See
+[whatsapp-product-card.md](whatsapp-product-card.md) for its complete contract,
+settings, examples, WhatChimp HTTP block setup, limits, and unverified API details.
+Existing browsing responses and access rules remain unchanged.
