@@ -77,7 +77,7 @@ IDs return 422. Use query aliases for GIDs to avoid slash encoding problems.
 
 | Method and path | Inputs | Response model |
 | --- | --- | --- |
-| GET `/products/collections` | None | `MenuCollections` |
+| GET `/products/collections` | `page=1` (positive integer) | `MenuCollections` |
 | GET `/products/collections/{collection_id}/products` | `limit=10` (1–50), optional `cursor` | `CollectionProducts` |
 | GET `/products/collection-products` | Required `collection_id`; same limit/cursor | Same collection response; recommended for GIDs |
 | GET `/products/{product_id}` | Optional `collection_id` context | `ProductDetails` |
@@ -94,11 +94,17 @@ Swagger/OpenAPI documents inputs, response models, API-key security, and errors.
 - Deduplicate by GID, preserving the first link's label, URL, tags, and position.
   A later unfiltered duplicate never overrides an earlier tagged link.
 - Keep the menu item's customer-facing title, even when Shopify's collection title differs.
-- GET `/products/collections` returns at most the first 10 unique valid collections
-  in depth-first menu order, fitting a WhatsApp interactive list. `total` is the
-  number returned (0?10); there is no collection-list pagination.
-- Product access checks still use the full configured menu, including collections
-  beyond the 10 displayed options, and preserve all tag restrictions.
+- GET `/products/collections?page=1` returns up to 9 unique valid collections
+  in depth-first menu order. All collections are reachable through successive pages.
+  `total` counts all unique menu collections, `page` is the requested page.
+- When another page exists, `has_next` is true and the tenth, final entry in
+  `collections` is `{"id": "PAGE:2", "title": "More Categories ?"}` (using the next
+  page number). Navigation rows contain only `id` and `title` and are not Shopify
+  collections. `total` excludes navigation rows. There is no separate `more` field.
+- On the last page `has_next` is false and no navigation row is appended. An empty
+  menu or page beyond the end returns `collections: []` and `has_next: false`.
+  Invalid page inputs return 422. Real collections retain their URL and tag fields.
+- Product access checks use the full configured menu and preserve tag restrictions.
 - Never query all Shopify collections to discover menu options.
 - Preserve menu tags. Every tag on the first link must occur in product `tags`
   (case-insensitive exact tag matching, AND semantics). Filtering occurs locally
@@ -175,7 +181,9 @@ X-API-Key: YOUR_BACKEND_KEY
   "menu_id": "gid://shopify/Menu/235088314461",
   "menu_title": "Shop",
   "total": 1,
-  "collections": [{"id": "gid://shopify/Collection/111", "title": "Hair Care", "url": "/collections/hair-care", "tags": []}]
+  "collections": [{"id": "gid://shopify/Collection/111", "title": "Hair Care", "url": "/collections/hair-care", "tags": []}],
+  "page": 1,
+  "has_next": false
 }
 ```
 
@@ -403,3 +411,25 @@ query ProductMenuMembership($productId: ID!, $after: String) {
   }
 }
 ```
+
+## WhatChimp collection pagination
+
+Start each Product Information journey with `page=1`. Render the returned
+`collections` array directly as list rows using each entry's `id` and `title`.
+When `has_next` is true, the array already includes More Categories ? as the
+last (tenth) row. Do not append another navigation row.
+
+When the selected ID starts with `PAGE:`, extract its positive integer suffix
+(e.g. `PAGE:2` means page 2) and call
+`/api/v1/shopify/products/collections?page=2` with the same X-API-Key. Replace the
+list with the new response. Otherwise pass the selected Shopify collection GID
+to the collection-products endpoint. Navigation IDs are not collection IDs and
+are rejected by product lookup validation. Reset to page 1 when restarting.
+
+The selected row carries the counter, so no shared backend counter is needed.
+Any stored page variable must belong to the individual conversation. Requests
+are stateless and repeating a page returns the same batch while the menu is
+unchanged. The current menu is loaded for each request: edits/reordering can move
+collections between pages, so restart at page 1 after edits.
+For example, 23 unique collections yield 9 + More, 9 + More, then 5 without More.
+WhatChimp selection routing must be configured separately.

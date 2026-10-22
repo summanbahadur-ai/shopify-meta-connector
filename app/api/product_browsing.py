@@ -68,9 +68,10 @@ router = APIRouter(prefix="/products", tags=["Product browsing"], route_class=Pr
 
 
 @router.get("/collections", response_model=MenuCollections)
-async def menu_collections(service: ProductBrowsingService = Depends(get_product_browsing_service)):
+async def menu_collections(page: int = Query(1, ge=1),
+                           service: ProductBrowsingService = Depends(get_product_browsing_service)):
     """Collections linked by the configured navigation menu, in menu order."""
-    return await service.collections()
+    return await service.collections(page=page)
 
 
 @router.get("/collection-products", response_model=CollectionProducts)

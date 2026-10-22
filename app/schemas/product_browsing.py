@@ -20,11 +20,18 @@ class MenuCollection(BaseModel):
     tags: list[str] = Field(default_factory=list)
 
 
+class CollectionNavigation(BaseModel):
+    id: str
+    title: str
+
+
 class MenuCollections(BaseModel):
     menu_id: str
     menu_title: str
     total: int
-    collections: list[MenuCollection]
+    collections: list[MenuCollection | CollectionNavigation]
+    page: int = 1
+    has_next: bool = False
 
 
 class ProductSummary(BaseModel):

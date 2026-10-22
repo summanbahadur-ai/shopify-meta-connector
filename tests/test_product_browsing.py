@@ -449,14 +449,39 @@ async def test_confirmed_pkr_uses_rupee_label_in_message():
     r = await service(menu([link()]), {"product": p}, {"product": {"inCollection": True}}).product_details(P, C)
     assert r.currency == "PKR" and "Price: Rs. 10" in r.whatsapp_message
 
-@pytest.mark.parametrize("count", [0, 4, 10, 13])
-async def test_collection_list_is_capped_for_whatsapp(count):
-    links = [link(f"gid://shopify/Collection/{i}", f"Collection {i}") for i in range(1, count + 1)]
-    # Duplicates and nested links still preserve depth-first unique menu order.
-    items = [link(), {"type": "PAGE", "items": links}] if count else []
-    result = await service(menu(items)).collections()
-    assert [c.id for c in result.collections] == [f"gid://shopify/Collection/{i}" for i in range(1, min(count, 10) + 1)]
-    assert result.total == min(count, 10)
+@pytest.mark.parametrize("count", [0, 4, 9, 10, 18, 23])
+async def test_collection_pages_and_more(count):
+    links = [link(f"gid://shopify/Collection/{i}") for i in range(1, count + 1)]
+    items = [{"type": "PAGE", "items": links}, *links]  # nested and duplicate links
+    s = service(*[menu(items) for _ in range(5)])
+    seen = []
+    page_number = 1
+    while True:
+        result = await s.collections(page=page_number)
+        assert len(result.collections) <= 10
+        assert result.total == count
+        assert result.page == page_number
+        real = [c for c in result.collections if not c.id.startswith("PAGE:")]
+        seen.extend(c.id for c in real)
+        assert "more" not in result.model_dump()
+        if not result.has_next:
+            assert len(real) == len(result.collections)
+            break
+        assert len(result.collections) == 10
+        assert result.collections[-1].model_dump() == {"id": f"PAGE:{page_number + 1}", "title": "More Categories ?"}
+        page_number = int(result.collections[-1].id.split(":")[1])
+    assert seen == [f"gid://shopify/Collection/{i}" for i in range(1, count + 1)]
+    beyond = await s.collections(page=page_number + 1)
+    assert beyond.collections == [] and beyond.has_next is False
+
+
+@pytest.mark.parametrize("value", [0, -1])
+async def test_collection_page_must_be_positive(value):
+    s = service()
+    with pytest.raises(Exception) as exc:
+        await s.collections(page=value)
+    assert exc.value.status == 422
+    s.client.query_with_retry.assert_not_awaited()
 
 
 async def test_collection_beyond_display_limit_remains_menu_authorized():

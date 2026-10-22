@@ -9,13 +9,14 @@ from app.clients.product_queries import (
     PRODUCT_MENU_ID, MENU_QUERY, COLLECTION_PRODUCTS_QUERY, PRODUCT_DETAILS_QUERY,
     VARIANTS_QUERY, MEMBERSHIP_QUERY, PRODUCT_COLLECTIONS_QUERY,
 )
+from app.messaging.product_messages import COLLECTION_MORE_TITLE
 from app.messaging.product_formatter import clean_description, format_product
 from app.schemas.product_browsing import (
-    BrowsingError, MenuCollection, MenuCollections, ProductSummary,
+    BrowsingError, MenuCollection, MenuCollections, CollectionNavigation, ProductSummary,
     Pagination, CollectionProducts, ProductDetails, ProductVariant,
 )
 
-MAX_MENU_COLLECTIONS = 10
+COLLECTION_PAGE_SIZE = 9
 MAX_COLLECTION_PAGES = 10
 MAX_VARIANT_PAGES = 20  # 1,000 variants, including the first page
 MAX_MEMBERSHIP_PAGES = 20
@@ -124,10 +125,16 @@ class ProductBrowsingService:
             raise _budget()
         product["variants"] = {"nodes": variants, "pageInfo": {"hasNextPage": after is not None, "endCursor": after}}
 
-    async def collections(self) -> MenuCollections:
+    async def collections(self, page: int = 1) -> MenuCollections:
+        if page < 1:
+            raise BrowsingError(422, "invalid_page", "Page must be a positive integer.")
         menu = await self._menu_collections()
-        displayed = menu.collections[:MAX_MENU_COLLECTIONS]
-        return menu.model_copy(update={"collections": displayed, "total": len(displayed)})
+        start = (page - 1) * COLLECTION_PAGE_SIZE
+        displayed = menu.collections[start:start + COLLECTION_PAGE_SIZE]
+        has_next = start + len(displayed) < menu.total
+        if has_next:
+            displayed.append(CollectionNavigation(id=f"PAGE:{page + 1}", title=COLLECTION_MORE_TITLE))
+        return menu.model_copy(update={"collections": displayed, "page": page, "has_next": has_next})
 
     async def _menu_collections(self) -> MenuCollections:
         data = await self.client.query_with_retry(MENU_QUERY, {"menuId": PRODUCT_MENU_ID})
