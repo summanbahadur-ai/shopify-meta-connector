@@ -390,3 +390,11 @@ reply-button message. It requires separate WhatChimp credentials and an inbound
 API key. See the [product-card service guide](docs/services/whatsapp-product-card.md)
 for setup, Swagger use, request/response examples, flow mapping, tests, and
 endpoint-specific compatibility checks still needed before production use.
+
+## Shopify carousel preview
+
+POST `/api/whatsapp/product-carousel` prepares 2-10 Shopify product cards (default
+4) with the existing inbound key. Set `dry_run=true`; live sending remains disabled
+until WhatChimp's carousel API/template mapping is verified. See the
+[carousel guide](docs/services/whatsapp-product-carousel.md) for examples and the
+remaining integration requirement. Existing single-card sending is unchanged.

@@ -447,3 +447,11 @@ interactive product card, protected by a separate inbound key. See
 [whatsapp-product-card.md](whatsapp-product-card.md) for its complete contract,
 settings, examples, WhatChimp HTTP block setup, limits, and unverified API details.
 Existing browsing responses and access rules remain unchanged.
+
+## Multi-product carousel preview
+
+POST `/api/whatsapp/product-carousel` reuses this service for up to 10 products
+(default 4) with images and available variants. The separate endpoint currently
+requires `dry_run=true` and does not send. See
+[whatsapp-product-carousel.md](whatsapp-product-carousel.md) for selection,
+pagination, examples and the pending WhatChimp carousel send contract.

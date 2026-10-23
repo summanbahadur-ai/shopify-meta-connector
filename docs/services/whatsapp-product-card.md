@@ -89,6 +89,29 @@ Example acceptance response (illustrative product):
 Collection ID in the response is numeric; product and selected variant retain
 real Shopify GIDs. No message is considered delivered merely because accepted.
 
+## Sending the first real Shopify product
+
+The interactive sender uses live Shopify data, not the illustrative product in
+this document or the mocked products in automated tests. Send only the recipient
+and the selected collection to choose the first visible, menu-filtered product:
+
+```json
+{
+  "phone_number": "CURRENT_CONTACT_PHONE",
+  "collection_id": "SELECTED_COLLECTION_ID"
+}
+```
+
+Omitting `product_index` uses 0. The route constructs the real Shopify client,
+loads collection products through `ProductBrowsingService.collection_products`,
+selects the requested index, retrieves that product's details with the collection
+context, and sends its actual title, PKR price, image and product-specific button
+IDs through WhatChimp. The response also uses those Shopify facts. No product
+name, price, product ID or image URL is fixed in the production sender. Changing
+the collection ID changes the Shopify lookup. A missing, forbidden, empty or
+invalid collection fails safely; there is no fallback to a sample product.
+Documentation examples and test fixtures do not supply runtime product data.
+
 ## Selection and work limits
 
 Reuse `collection_products(limit=50, cursor=...)` and follow pagination, including

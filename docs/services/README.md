@@ -11,6 +11,7 @@ by purpose. They do not imply separate deployed services.
 | [shop.md](shop.md) | Connection test |
 | [product.md](product.md) | Menu-based WhatsApp browsing, visibility, authentication, and messages |
 | [whatsapp-product-card.md](whatsapp-product-card.md) | WhatChimp interactive product-card submission |
+| [whatsapp-product-carousel.md](whatsapp-product-carousel.md) | Shopify carousel preview; WhatChimp send mapping pending |
 | [orders.md](orders.md) | Validated order-status lookup and natural-language messages |
 | [content.md](content.md) | Policies and FAQ search |
 | [template.md](template.md) | Starting point for a new operation |

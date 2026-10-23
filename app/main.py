@@ -3,6 +3,7 @@ from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
 from app.api.product_card import router as product_card_router
+from app.api.product_carousel import router as product_carousel_router
 from app.core.config import ConfigurationError
 from app.core.exceptions import AmbiguousOrderError, OrderLookupLimitError, ShopifyAuthenticationError, ShopifyAPIError
 
@@ -13,6 +14,7 @@ app = FastAPI(
 )
 app.include_router(api_router)
 app.include_router(product_card_router)
+app.include_router(product_carousel_router)
 
 
 @app.get("/")
