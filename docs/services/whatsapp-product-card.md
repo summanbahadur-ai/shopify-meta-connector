@@ -46,8 +46,9 @@ Currently unavailable wording.
 
 The current selling price is the existing selected variant's price: first
 available variant, or first variant if all are sold out. Compare-at price is
-from that same variant, never an unrelated variant. On sale is Yes only when
-compare-at strictly exceeds selling price. Original price is omitted otherwise.
+from that same variant, never an unrelated variant. A Sale tag appears only when
+compare-at strictly exceeds selling price. Regular-price cards omit the Sale tag
+and original price; they never display On sale: No.
 Prices use Decimal, thousands separators and the actual Shopify currency.
 There is no invented discount, conversion, stock quantity or delivery promise.
 Website variant selection, customer discounts and prices may differ at checkout.
@@ -61,7 +62,7 @@ Illustrative caption (values come from Shopify, not this example):
 
 *Current price:* PKR 2,950
 
-*On sale:* Yes
+*Sale*
 
 *Original price:* PKR 3,500
 

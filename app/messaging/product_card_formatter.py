@@ -34,9 +34,9 @@ def build_product_card(product):
     price = _amount(product.price)
     original = _amount(product.compare_at_price) if product.compare_at_price else None
     sale = original is not None and original > price
-    heading = [f"*{title}*", f"*{M.CURRENT_PRICE_LABEL}:* {_money(price, product.currency)}",
-               f"*{M.SALE_LABEL}:* {M.YES if sale else M.NO}"]
+    heading = [f"*{title}*", f"*{M.CURRENT_PRICE_LABEL}:* {_money(price, product.currency)}"]
     if sale:
+        heading.append(f"*{M.SALE_LABEL}*")
         heading.append(f"*{M.ORIGINAL_LABEL}:* {_money(original, product.currency)}")
     heading.append(M.AVAILABLE if product.available else M.UNAVAILABLE)
     top = "\n\n".join(heading)

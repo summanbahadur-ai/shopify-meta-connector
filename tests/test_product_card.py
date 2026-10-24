@@ -58,7 +58,7 @@ def test_professional_caption():
     card = build_product_card(product())
     text = card["message"]
     assert "*Lotion*" in text and "*Current price:* PKR 2,950" in text
-    assert "*On sale:* Yes" in text and "PKR 3,500" in text
+    assert "*Sale*" in text and "PKR 3,500" in text
     assert "Moisturizing lotion." in text and "<p>" not in text
     assert "*Shop online*" in text and text.endswith("https://example.com/lotion")
     assert "buttons" not in card and "Product 1 of" not in text
@@ -67,7 +67,7 @@ def test_professional_caption():
 @pytest.mark.parametrize("compare", [None, "2950", "1000"])
 def test_no_sale_uses_same_variant_comparison(compare):
     text = build_product_card(product(compare_at_price=compare, on_sale=True))["message"]
-    assert "*On sale:* No" in text and "Original price" not in text
+    assert "sale" not in text.lower() and "Original price" not in text
 
 
 def test_long_caption_keeps_link_and_price():
