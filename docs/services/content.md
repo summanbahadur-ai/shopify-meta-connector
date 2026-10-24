@@ -9,7 +9,15 @@ Existing basic tests: `tests/test_shopify_service.py::test_policies_and_pages`.
 
 ## Policies
 
-GET `/api/v1/shopify/policies` -> `get_policies()`. No query parameters.
+GET `/api/v1/shopify/policies` -> `get_policies(policy_type=None)`.
+Optional query parameter `policy_type` filters the returned list by an exact,
+case-sensitive match against the Shopify policy's `type`. Omitting it returns
+all policies; unknown, empty or differently cased values return an empty list.
+Filtering is local after the existing Shopify lookup; the GraphQL query is unchanged.
+
+Example: `/api/v1/shopify/policies?policy_type=REFUND_POLICY` returns only refund
+policies. `/api/v1/shopify/policies?policy_type=SHIPPING_POLICY` selects shipping
+policies when that type is present. The response remains `{"policies": [...]}`.
 Calls GraphQL `Policies` without variables. Selects:
 
 ```text
@@ -61,5 +69,6 @@ It returns only the first page of matches. All operations use shared errors.
 
 Check policy HTTP wrapping versus service return value, page fields, cursor
 and query forwarding, empty results, and the exact FAQ search variables.
-Existing tests cover basic service counts, not HTTP wrappers or FAQ behavior.
+Tests cover policy filtering, exact-match and empty-result behavior, unchanged HTML,
+and the HTTP response wrapper, alongside basic connection/page checks.
 

@@ -48,8 +48,8 @@ async def order_status(lookup: OrderLookup = Depends(order_lookup_input),
 
 
 @router.get("/policies")
-async def policies(service: ShopifyService = Depends(get_shopify_service)):
-    return {"policies": await service.get_policies()}
+async def policies(policy_type: str | None = None, service: ShopifyService = Depends(get_shopify_service)):
+    return {"policies": await service.get_policies(policy_type)}
 
 
 @router.get("/faq")

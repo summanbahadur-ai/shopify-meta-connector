@@ -166,7 +166,7 @@ Expected shape:
 | GET | `/api/v1/shopify/products/collections/{collection_id}/products` | All visible collection products as id/title pairs (X-API-Key required) |
 | GET | `/api/v1/shopify/products/{product_id}` | Full product details and WhatsApp message |
 | GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message and relevant shipment details |
-| GET | `/api/v1/shopify/policies` | Store legal policies |
+| GET | `/api/v1/shopify/policies` | Store legal policies; optional exact `policy_type` filter |
 | GET | `/api/v1/shopify/faq` | Search pages for FAQ content |
 
 ### Simple collection and product lists
