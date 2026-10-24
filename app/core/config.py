@@ -101,7 +101,7 @@ class WhatChimpSettings:
 
 @dataclass(frozen=True, repr=False)
 class ButtonWebhookSettings:
-    token_key: str
+    token_key: str = ""
     previous_keys: tuple[str, ...] = ()
     phone_path: str = ""
     subscriber_path: str = ""

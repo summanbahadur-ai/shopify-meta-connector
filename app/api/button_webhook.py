@@ -4,18 +4,17 @@ import json
 import logging
 import re
 from urllib.parse import parse_qs
-from fastapi import APIRouter, Depends, Request, Security
+from fastapi import APIRouter, Depends, Request
+from pydantic import ValidationError
 from fastapi.responses import JSONResponse
 from fastapi.routing import APIRoute
-from fastapi.security import APIKeyQuery
 from app.api.dependencies import get_shopify_service
 from app.clients.whatchimp_text_client import WhatChimpTextClient
 from app.core.config import ButtonWebhookSettings, WhatChimpSettings, ConfigurationError
 from app.core.exceptions import ShopifyAPIError, ShopifyAuthenticationError
 from app.schemas.product_card import CardError
 from app.schemas.product_browsing import BrowsingError
-from app.schemas.button_webhook import ButtonWebhookError
-from app.services.button_tokens import decode_button_token
+from app.schemas.button_webhook import ButtonWebhookError, ButtonClickPayload
 from app.services.button_identity import identify_customer
 from app.services.button_state import D1ButtonState, local_state
 from app.services.button_webhook import ButtonDetailsService
@@ -53,8 +52,7 @@ class ButtonURLPrivacy:
                     values = parse_qs(query.decode("ascii"), keep_blank_values=True, max_num_fields=50)
                 except (ValueError, UnicodeError):
                     pass
-            tokens = values.pop("token", [])
-            scope["button_token"] = tokens[0] if len(tokens) == 1 else None
+            values.pop("token", None)
             scope["button_query"] = {key: value[0] if len(value) == 1 else value for key, value in values.items()}
         await self.app(scope, receive, send)
 
@@ -82,26 +80,24 @@ class ButtonWebhookRoute(APIRoute):
         return safe_handler
 
 
-token_scheme = APIKeyQuery(name="token", scheme_name="EncryptedButtonToken", auto_error=False)
-
-
-async def authenticate_button(request: Request, ignored=Security(token_scheme)):
+async def parse_button_request(request: Request):
     settings = ButtonWebhookSettings.from_source(request.scope.get("env"))
-    token = request.scope.pop("button_token", None)
-    if not token:
-        raise ButtonWebhookError(401, "invalid_button_token", "Invalid or missing button token.")
-    payload = decode_button_token(token, settings=settings)
+    query = request.scope.get("button_query", {})
+    try:
+        payload = ButtonClickPayload.model_validate({name: query.get(name) for name in ("product_id", "action")})
+    except ValidationError:
+        raise ButtonWebhookError(422, "invalid_button_request", "Provide a valid product_id and action=view_details.") from None
     env = request.scope.get("env")
     database = env.get("WHATCHIMP_BUTTON_STATE") if isinstance(env, dict) else getattr(env, "WHATCHIMP_BUTTON_STATE", None) if env is not None else None
     state = D1ButtonState(database) if database is not None else local_state
-    # One bucket per encrypted product/action identity, independent of bearer ciphertext.
+    # This public callback is rate limited per product, independent of recipient.
     rate_key = "product:" + hashlib.sha256(payload.product_id.encode()).hexdigest()
     if not await state.allow(rate_key, settings.rate_limit):
         raise ButtonWebhookError(429, "button_rate_limit", "Too many product-details requests. Try later.")
     return settings, payload, state
 
 
-def get_button_service(request: Request, auth=Depends(authenticate_button)):
+def get_button_service(request: Request, auth=Depends(parse_button_request)):
     settings, payload, state = auth
     shopify = get_shopify_service(request).client
     return ButtonDetailsService(ProductBrowsingService(shopify),
@@ -136,11 +132,15 @@ async def read_payload(request):
     raise ButtonWebhookError(415, "unsupported_content_type", "Use JSON or form-encoded webhook data.")
 
 
-router = APIRouter(prefix="/api/whatsapp", tags=["Encrypted product button webhook"], route_class=ButtonWebhookRoute)
+router = APIRouter(prefix="/api/whatsapp", tags=["Product button webhook"], route_class=ButtonWebhookRoute)
+QUERY_DOCS = {"parameters": [
+    {"name": "product_id", "in": "query", "required": True, "schema": {"type": "string"}},
+    {"name": "action", "in": "query", "required": True, "schema": {"type": "string", "enum": ["view_details"]}},
+]}
 
 
-@router.get("/button-click", operation_id="button_click_get")
-@router.post("/button-click", operation_id="button_click_post")
+@router.get("/button-click", operation_id="button_click_get", openapi_extra=QUERY_DOCS)
+@router.post("/button-click", operation_id="button_click_post", openapi_extra=QUERY_DOCS)
 async def button_click(request: Request, context=Depends(get_button_service)):
     service, payload = context
     body, _ = await read_payload(request)

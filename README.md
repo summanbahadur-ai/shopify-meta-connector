@@ -405,11 +405,11 @@ until WhatChimp's carousel API/template mapping is verified. See the
 [carousel guide](docs/services/whatsapp-product-carousel.md) for examples and the
 remaining integration requirement. Existing single-card sending is unchanged.
 
-## Encrypted product-specific View Details webhook
+## Manual View Details buttons
 
-GET/POST `/api/whatsapp/button-click` authenticates with a Fernet URL token, fetches
-live Shopify details and sends plain text to the callback's customer phone number.
-Existing X-API-Key endpoints remain protected. Generate a URL with
-`python scripts/generate_whatchimp_button_url.py --product-id 8173166231645 --action view_details`.
-No enable/diagnostic flags are required. See the
-[button webhook guide](docs/services/whatsapp-button-details.md) for setup.
+GET/POST `/api/whatsapp/button-click?product_id=8173166231645&action=view_details`
+fetches live Shopify details and sends plain text to WhatChimp's customer `chat_id`.
+This public callback uses no token decryption or X-API-Key. Existing protected
+endpoints retain their authentication. WhatChimp's captured request is POST JSON.
+See [the button webhook guide](docs/services/whatsapp-button-details.md) for the captured payload,
+setup, duplicate suppression and security limitations.

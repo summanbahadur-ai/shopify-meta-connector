@@ -30,7 +30,7 @@ def identify_customer(body, query, settings):
     source = {"body": body, "query": query}
     paths = [settings.phone_path] if settings.phone_path else [
         prefix + name for prefix in ("body.", "body.data.", "body.payload.", "query.")
-        for name in ("phone_number", "wa_id", "from", "contact.phone", "contact.wa_id", "subscriber.phone_number", "subscriber.wa_id")]
+        for name in ("chat_id", "phone_number", "wa_id", "from", "contact.phone", "contact.wa_id", "subscriber.phone_number", "subscriber.wa_id")]
     phones = set()
     for path in paths:
         raw = field_at(source, path)
@@ -48,5 +48,6 @@ def identify_customer(body, query, settings):
     subscriber = identifier([settings.subscriber_path] if settings.subscriber_path else
                             ["body.subscriber_id", "body.subscriber.id", "query.subscriber_id"])
     event = identifier([settings.event_id_path] if settings.event_id_path else
-                      ["body.event_id", "body.message_id", "body.message.id", "query.event_id", "query.message_id"])
+                      (["body.wa_message_id"] if field_at(source, "body.wa_message_id") is not None else
+                       ["body.event_id", "body.message_id", "body.message.id", "query.event_id", "query.message_id"]))
     return CustomerIdentity(phone, subscriber, event)

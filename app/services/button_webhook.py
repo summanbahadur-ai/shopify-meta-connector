@@ -1,5 +1,4 @@
 import hashlib
-import hmac
 from app.schemas.button_webhook import ButtonWebhookError
 from app.messaging.button_details_formatter import format_button_details
 
@@ -15,7 +14,7 @@ class ButtonDetailsService:
             raise ButtonWebhookError(422, "customer_not_identified", "No customer phone number is available. No message sent.")
         context = identity.phone + ":" + payload.product_id
         claim = ("event:" + identity.event_id + ":" + context) if identity.event_id else ("click:" + context)
-        state_key = hmac.new(self.settings.token_key.encode(), claim.encode(), hashlib.sha256).hexdigest()
+        state_key = hashlib.sha256(claim.encode()).hexdigest()
         # Claim before external work. Retain on all failures to prevent ambiguous retry sends.
         if not await self.state.claim(state_key, 86400 if identity.event_id else 10):
             return {**acknowledgement, "mode": "duplicate", "submitted": False}

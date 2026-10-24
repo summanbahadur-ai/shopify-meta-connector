@@ -9,18 +9,10 @@ class ButtonWebhookError(RuntimeError):
         super().__init__(code)
 
 
-class ButtonTokenPayload(BaseModel):
+class ButtonClickPayload(BaseModel):
     model_config = ConfigDict(extra="forbid", strict=True)
-    version: Literal[1] = 1
     action: Literal["view_details"]
     product_id: str
-
-    @field_validator("version", mode="before")
-    @classmethod
-    def integer_version(cls, value):
-        if type(value) is not int:
-            raise ValueError("Invalid version")
-        return value
 
     @field_validator("product_id")
     @classmethod
@@ -30,3 +22,15 @@ class ButtonTokenPayload(BaseModel):
         if not re.fullmatch(r"[1-9][0-9]{0,19}", numeric):
             raise ValueError("Invalid product ID")
         return numeric
+
+
+class ButtonTokenPayload(ButtonClickPayload):
+    """Retained for the internal token utility; the HTTP callback does not use it."""
+    version: Literal[1] = 1
+
+    @field_validator("version", mode="before")
+    @classmethod
+    def integer_version(cls, value):
+        if type(value) is not int:
+            raise ValueError("Invalid version")
+        return value

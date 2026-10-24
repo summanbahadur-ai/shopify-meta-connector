@@ -456,11 +456,11 @@ requires `dry_run=true` and does not send. See
 [whatsapp-product-carousel.md](whatsapp-product-carousel.md) for selection,
 pagination, examples and the pending WhatChimp carousel send contract.
 
-## Encrypted manual View Details buttons
+## Manual View Details buttons
 
-GET/POST `/api/whatsapp/button-click?token=...` validates a dedicated Fernet token,
-fetches the specified Shopify product and sends plain-text details to the customer
-number in the callback. No enable or diagnostic switches are required. Existing
-X-API-Key endpoints are unchanged. See
-[whatsapp-button-details.md](whatsapp-button-details.md) for URL generation,
-recipient fields, pricing/reviews and retry protection.
+GET/POST `/api/whatsapp/button-click?product_id=8173166231645&action=view_details`
+fetches live Shopify details and sends plain text to WhatChimp's customer `chat_id`.
+This public callback uses no token decryption or X-API-Key. Existing protected
+endpoints retain their authentication. WhatChimp's captured request is POST JSON.
+See [whatsapp-button-details.md](whatsapp-button-details.md) for the captured payload,
+setup, duplicate suppression and security limitations.

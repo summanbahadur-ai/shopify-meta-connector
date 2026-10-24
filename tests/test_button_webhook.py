@@ -119,7 +119,7 @@ def test_tampered_wrong_key_and_rotation(key):
 
 
 @pytest.mark.parametrize("method", ["get", "post"])
-def test_authenticated_button_sends_without_enable_flags_or_api_key(key, monkeypatch, method):
+def test_plain_button_sends_without_token_key_flags_or_api_key(monkeypatch, method):
     # Old disable/diagnostic settings must no longer block a valid request.
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_ENABLED", "false")
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_DIAGNOSTIC_MODE", "true")
@@ -130,17 +130,17 @@ def test_authenticated_button_sends_without_enable_flags_or_api_key(key, monkeyp
     monkeypatch.setattr(route, "get_shopify_service", lambda request: SimpleNamespace(client=None))
     monkeypatch.setattr(route, "ProductBrowsingService", lambda client: source)
     monkeypatch.setattr(route, "WhatChimpTextClient", lambda config: sender)
-    token = generate_button_token("123", "view_details")
+    monkeypatch.delenv("WHATCHIMP_BUTTON_TOKEN_KEY", raising=False)
     client = TestClient(app)
     if method == "post":
-        result = client.post("/api/whatsapp/button-click", params={"token": token}, json={"phone_number": "923244374905"})
+        result = client.post("/api/whatsapp/button-click", params={"product_id": "123", "action": "view_details"}, json={"chat_id": "923244374905", "whatsapp_bot_username": "+92 309 8880105"})
     else:
-        result = client.get("/api/whatsapp/button-click", params={"token": token, "phone_number": "923244374905"})
+        result = client.get("/api/whatsapp/button-click", params={"product_id": "123", "action": "view_details", "chat_id": "923244374905"})
     assert result.status_code == 200 and result.json()["mode"] == "submitted"
     sender.send_text.assert_awaited_once()
     sender.send_card.assert_not_awaited()
-    assert client.post("/api/whatsapp/button-click").status_code == 401
-    assert client.get("/api/whatsapp/button-click?token=bad").status_code == 401
+    assert client.post("/api/whatsapp/button-click").status_code == 422
+    assert client.get("/api/whatsapp/button-click?token=bad").status_code == 422
 
 
 def test_customer_mapping_is_explicit_and_not_invented(key, monkeypatch):
@@ -152,9 +152,9 @@ def test_customer_mapping_is_explicit_and_not_invented(key, monkeypatch):
     assert identify_customer({"customer": {"whatsapp": "03244374905"}}, {}, config).phone is None
 
 
-def test_token_required_and_other_routes_protected(key, monkeypatch):
+def test_product_action_required_and_other_routes_protected(key, monkeypatch):
     client = TestClient(app)
-    assert client.get("/api/whatsapp/button-click").status_code == 401
+    assert client.get("/api/whatsapp/button-click").status_code == 422
     monkeypatch.setenv("WHATCHIMP_INBOUND_API_KEY", "expected")
     monkeypatch.setenv("PRODUCT_BROWSING_API_KEY", "expected")
     assert client.post("/api/whatsapp/product-card", json={"phone_number":"923001234567", "collection_id":"1"}).status_code == 401
@@ -166,7 +166,7 @@ def test_sensitive_data_not_logged(key, monkeypatch, caplog):
     monkeypatch.setattr(route, "get_button_service", route.get_button_service)
     caplog.set_level(logging.INFO)
     token = generate_button_token("1", "view_details")
-    result = TestClient(app).post("/api/whatsapp/button-click", params={"token": token}, json={"phone_number": "923244374905", "apiToken": "private-token", "text":"private customer text"})
+    result = TestClient(app).post("/api/whatsapp/button-click", params={"product_id": "1", "action": "view_details", "token": token}, json={"chat_id": "923244374905", "apiToken": "private-token", "text":"private customer text"})
     assert result.status_code in (200, 422)
     for value in (token, key, "923244374905", "private-token", "private customer text"):
         assert value not in caplog.text + result.text
@@ -176,7 +176,7 @@ def test_rate_limit_and_size(key, monkeypatch):
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_ENABLED", "true")
     monkeypatch.setenv("WHATCHIMP_BUTTON_RATE_LIMIT", "1")
     client = TestClient(app)
-    url = "/api/whatsapp/button-click?token=" + generate_button_token("1", "view_details") + "&phone_number=923244374905"
+    url = "/api/whatsapp/button-click?product_id=1&action=view_details&chat_id=923244374905"
     assert client.get(url).status_code == 200
     assert client.get(url).status_code == 429
     local_state.windows.clear()
@@ -339,12 +339,13 @@ async def test_atomic_d1_sql_persists_across_service_instances(monkeypatch):
     database.close()
 
 
-def test_cli_generates_product_specific_url_without_plaintext_id(key):
+def test_cli_generates_plain_product_specific_url(monkeypatch):
     import subprocess,sys
+    monkeypatch.delenv("WHATCHIMP_BUTTON_TOKEN_KEY", raising=False)
     result=subprocess.run([sys.executable,"scripts/generate_whatchimp_button_url.py","--product-id","123"],capture_output=True,text=True)
     assert result.returncode==0
-    assert "/api/whatsapp/button-click?token=" in result.stdout
-    assert decode_button_token(parse_qs(result.stdout.strip().split("?",1)[1])["token"][0]).product_id=="123"
+    assert "/api/whatsapp/button-click?" in result.stdout
+    assert parse_qs(result.stdout.strip().split("?",1)[1]) == {"product_id": ["123"], "action": ["view_details"]}
 
 
 
@@ -405,3 +406,63 @@ async def test_local_duplicate_suppression_needs_no_database():
     local_state.claims.clear()
     assert await local_state.claim("example",10)
     assert not await local_state.claim("example",10)
+
+
+@pytest.mark.parametrize("params", [
+    {"product_id": "bad", "action": "view_details"},
+    {"product_id": "123", "action": "add"},
+    {"product_id": "123"},
+    {"action": "view_details"},
+    [("product_id", "123"), ("product_id", "456"), ("action", "view_details")],
+])
+def test_plain_query_validation_prevents_external_calls(params, monkeypatch):
+    source = SimpleNamespace(product_details=AsyncMock())
+    sender = SimpleNamespace(send_text=AsyncMock())
+    monkeypatch.setattr(route, "ProductBrowsingService", lambda client: source)
+    monkeypatch.setattr(route, "WhatChimpTextClient", lambda config: sender)
+    response = TestClient(app).post("/api/whatsapp/button-click", params=params, json={"chat_id": "923244374905"})
+    assert response.status_code == 422
+    source.product_details.assert_not_awaited()
+    sender.send_text.assert_not_awaited()
+
+
+def test_captured_whatchimp_post_and_retry(monkeypatch):
+    monkeypatch.delenv("WHATCHIMP_BUTTON_TOKEN_KEY", raising=False)
+    source = SimpleNamespace(product_details=AsyncMock(return_value=details()))
+    sender = SimpleNamespace(send_text=AsyncMock())
+    monkeypatch.setattr(route, "ProductBrowsingService", lambda client: source)
+    monkeypatch.setattr(route, "WhatChimpTextClient", lambda config: sender)
+    data = {
+        "first_name": "Test Customer", "chat_id": "923244374905",
+        "postbackid": "n5wAbf06801VWw6", "user_input_data": [],
+        "reply_message_id": "wamid.original-card", "wa_message_id": "wamid.customer-click-1",
+        "whatsapp_bot_username": "+92 309 8880105",
+    }
+    identity = identify_customer(data, {}, ButtonWebhookSettings())
+    assert identity.phone == "923244374905"
+    assert identity.event_id == "wamid.customer-click-1"
+    client = TestClient(app)
+    url = "/api/whatsapp/button-click?product_id=8173166231645&action=view_details"
+    assert client.post(url, json=data).json()["mode"] == "submitted"
+    source.product_details.assert_awaited_once_with("8173166231645")
+    assert sender.send_text.call_args.args[0] == "923244374905"
+    assert client.post(url, json=data).json()["mode"] == "duplicate"
+    sender.send_text.assert_awaited_once()
+    data["wa_message_id"] = "wamid.customer-click-2"
+    assert client.post(url, json=data).json()["mode"] == "submitted"
+    assert sender.send_text.await_count == 2
+
+
+def test_business_number_and_original_message_are_not_customer_identity():
+    identity = identify_customer({"whatsapp_bot_username": "+92 309 8880105",
+        "postbackid": "static-button", "reply_message_id": "wamid.original-card"}, {}, ButtonWebhookSettings())
+    assert identity.phone is None and identity.event_id is None
+    response = TestClient(app).post("/api/whatsapp/button-click?product_id=123&action=view_details",
+        json={"whatsapp_bot_username": "+92 309 8880105"})
+    assert response.status_code == 422 and response.json()["code"] == "customer_not_identified"
+
+
+def test_plain_webhook_openapi():
+    operation = app.openapi()["paths"]["/api/whatsapp/button-click"]["post"]
+    assert not operation.get("security")
+    assert {p["name"] for p in operation["parameters"]} == {"product_id", "action"}
