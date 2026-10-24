@@ -68,6 +68,18 @@ jobs:
             printf '%s' "${WHATCHIMP_API_BASE_URL:-https://app.whatchimp.com/api/v1}" | uv run pywrangler secret put WHATCHIMP_API_BASE_URL
           fi
 
+      - name: Configure optional encrypted button keys
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          WHATCHIMP_BUTTON_TOKEN_KEY: ${{ secrets.WHATCHIMP_BUTTON_TOKEN_KEY }}
+          WHATCHIMP_BUTTON_TOKEN_PREVIOUS_KEYS: ${{ secrets.WHATCHIMP_BUTTON_TOKEN_PREVIOUS_KEYS }}
+        run: |
+          if [ -n "$WHATCHIMP_BUTTON_TOKEN_KEY" ]; then
+            printf '%s' "$WHATCHIMP_BUTTON_TOKEN_KEY" | uv run pywrangler secret put WHATCHIMP_BUTTON_TOKEN_KEY
+            printf '%s' "$WHATCHIMP_BUTTON_TOKEN_PREVIOUS_KEYS" | uv run pywrangler secret put WHATCHIMP_BUTTON_TOKEN_PREVIOUS_KEYS
+          fi
+
       - name: Deploy to Cloudflare
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

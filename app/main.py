@@ -2,6 +2,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from app.api.router import api_router
+from app.api.button_webhook import router as button_webhook_router, ButtonURLPrivacy
 from app.api.product_card import router as product_card_router
 from app.api.product_carousel import router as product_carousel_router
 from app.core.config import ConfigurationError
@@ -12,6 +13,8 @@ app = FastAPI(
     version="0.1.0",
     description="Shopify data API foundation for a future Meta WhatsApp commerce assistant.",
 )
+app.add_middleware(ButtonURLPrivacy)
+app.include_router(button_webhook_router)
 app.include_router(api_router)
 app.include_router(product_card_router)
 app.include_router(product_carousel_router)

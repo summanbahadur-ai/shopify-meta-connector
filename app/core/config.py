@@ -97,3 +97,45 @@ class WhatChimpSettings:
         if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
             raise ConfigurationError("WhatChimp base URL is invalid")
         return cls(token, phone_id, key, base)
+
+
+@dataclass(frozen=True, repr=False)
+class ButtonWebhookSettings:
+    token_key: str
+    previous_keys: tuple[str, ...] = ()
+    phone_path: str = ""
+    subscriber_path: str = ""
+    event_id_path: str = ""
+    rate_limit: int = 30
+    reviews_verified: bool = False
+    review_source: str = "standard"
+    reviews_namespace: str = "reviews"
+    rating_key: str = "rating"
+    review_count_key: str = "rating_count"
+
+    @classmethod
+    def from_source(cls, source=None):
+        def read(key, default=""):
+            value = _read(source, key)
+            return value if value is not None else os.environ.get(key, default)
+        def flag(key, default="false"):
+            value = read(key, default).lower()
+            if value not in ("true", "false"):
+                raise ConfigurationError("Invalid button webhook flag")
+            return value == "true"
+        try:
+            rate = int(read("WHATCHIMP_BUTTON_RATE_LIMIT", "30"))
+            if not 1 <= rate <= 600:
+                raise ValueError()
+        except ValueError:
+            raise ConfigurationError("Invalid button rate limit") from None
+        return cls(token_key=read("WHATCHIMP_BUTTON_TOKEN_KEY"),
+            previous_keys=tuple(k.strip() for k in read("WHATCHIMP_BUTTON_TOKEN_PREVIOUS_KEYS").split(",") if k.strip()),
+            phone_path=read("WHATCHIMP_BUTTON_PHONE_PATH"),
+            subscriber_path=read("WHATCHIMP_BUTTON_SUBSCRIBER_PATH"),
+            event_id_path=read("WHATCHIMP_BUTTON_EVENT_ID_PATH"), rate_limit=rate,
+            reviews_verified=flag("WHATCHIMP_BUTTON_REVIEWS_VERIFIED"),
+            review_source=read("WHATCHIMP_BUTTON_REVIEW_SOURCE", "standard"),
+            reviews_namespace=read("WHATCHIMP_BUTTON_REVIEWS_NAMESPACE", "reviews"),
+            rating_key=read("WHATCHIMP_BUTTON_RATING_KEY", "rating"),
+            review_count_key=read("WHATCHIMP_BUTTON_REVIEW_COUNT_KEY", "rating_count"))

@@ -398,3 +398,12 @@ POST `/api/whatsapp/product-carousel` prepares 2-10 Shopify product cards (defau
 until WhatChimp's carousel API/template mapping is verified. See the
 [carousel guide](docs/services/whatsapp-product-carousel.md) for examples and the
 remaining integration requirement. Existing single-card sending is unchanged.
+
+## Encrypted product-specific View Details webhook
+
+GET/POST `/api/whatsapp/button-click` authenticates with a Fernet URL token, fetches
+live Shopify details and sends plain text to the callback's customer phone number.
+Existing X-API-Key endpoints remain protected. Generate a URL with
+`python scripts/generate_whatchimp_button_url.py --product-id 8173166231645 --action view_details`.
+No enable/diagnostic flags are required. See the
+[button webhook guide](docs/services/whatsapp-button-details.md) for setup.

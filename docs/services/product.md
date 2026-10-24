@@ -455,3 +455,12 @@ POST `/api/whatsapp/product-carousel` reuses this service for up to 10 products
 requires `dry_run=true` and does not send. See
 [whatsapp-product-carousel.md](whatsapp-product-carousel.md) for selection,
 pagination, examples and the pending WhatChimp carousel send contract.
+
+## Encrypted manual View Details buttons
+
+GET/POST `/api/whatsapp/button-click?token=...` validates a dedicated Fernet token,
+fetches the specified Shopify product and sends plain-text details to the customer
+number in the callback. No enable or diagnostic switches are required. Existing
+X-API-Key endpoints are unchanged. See
+[whatsapp-button-details.md](whatsapp-button-details.md) for URL generation,
+recipient fields, pricing/reviews and retry protection.
