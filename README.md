@@ -162,23 +162,23 @@ Expected shape:
 | GET | `/` | Service information |
 | GET | `/health` | Liveness check |
 | GET | `/api/v1/shopify/connection` | Verify Shopify authentication/API connection |
-| GET | `/api/v1/shopify/products/collections` | 9 collections per page, with More navigation (X-API-Key required) |
-| GET | `/api/v1/shopify/products/collections/{collection_id}/products` | Active, published products with full descriptions and a single default price |
+| GET | `/api/v1/shopify/products/collections` | All menu collections as id/title pairs (X-API-Key required) |
+| GET | `/api/v1/shopify/products/collections/{collection_id}/products` | All visible collection products as id/title pairs (X-API-Key required) |
 | GET | `/api/v1/shopify/products/{product_id}` | Full product details and WhatsApp message |
 | GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message and relevant shipment details |
 | GET | `/api/v1/shopify/policies` | Store legal policies |
 | GET | `/api/v1/shopify/faq` | Search pages for FAQ content |
 
-### Pagination
+### Simple collection and product lists
 
-Menu-based products expose cursor pagination:
-
-```text
-GET /api/v1/shopify/products/collections/111/products?limit=10
-GET /api/v1/shopify/products/collections/111/products?limit=10&cursor=<next_cursor>
-```
-
-Send X-API-Key and follow `pagination.next_cursor` while `has_next_page` is true.
+Send X-API-Key. GET `/api/v1/shopify/products/collections` returns only
+`{"collections": [{"id": "111", "title": "Hair Care"}]}`.
+GET `/api/v1/shopify/products/collections/111/products` returns only
+`{"products": [{"id": "333", "title": "Conditioner"}]}`.
+Both return numeric ID strings and titles without metadata or More rows.
+Shopify pagination is handled internally; public page/limit/cursor inputs are
+no longer used. Full product details remain available through the details API.
+See [the product guide](docs/services/product.md) for filtering and work limits.
 
 ## Important order-status security note
 

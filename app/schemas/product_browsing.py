@@ -25,6 +25,14 @@ class CollectionNavigation(BaseModel):
     title: str
 
 
+class CollectionOptions(BaseModel):
+    collections: list[CollectionNavigation]
+
+
+class ProductOptions(BaseModel):
+    products: list[CollectionNavigation]
+
+
 class MenuCollections(BaseModel):
     menu_id: str
     menu_title: str

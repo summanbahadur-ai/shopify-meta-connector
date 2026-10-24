@@ -48,19 +48,18 @@ def service(*responses):
 async def test_menu_order_nesting_duplicates_and_labels():
     s = service(menu([link(), {"type": "PAGE", "items": [link("gid://shopify/Collection/4", "Second")]},
                       link(title="Duplicate"), {"type": "PRODUCT", "resourceId": P}, link("bad")]))
-    result = await s.collections()
+    result = await s.collection_options()
     assert [x.title for x in result.collections] == ["Menu label", "Second"]
     assert [x.id for x in result.collections] == ["1", "4"]
-    assert result.total == 2
 
 
 async def test_empty_menu():
-    assert (await service(menu()).collections()).collections == []
+    assert (await service(menu()).collection_options()).collections == []
 
 
 async def test_missing_menu():
     with pytest.raises(Exception) as exc:
-        await service({"menu": None}).collections()
+        await service({"menu": None}).collection_options()
     assert exc.value.code == "menu_unavailable"
 
 
@@ -199,7 +198,6 @@ def test_safe_upstream_errors(monkeypatch, error):
 
 @pytest.mark.parametrize("url", [
     "/products/collection-products?collection_id=bad", "/products/bad",
-    "/products/collections/1/products?limit=51", "/products/collections/1/products?limit=0",
     "/products/collection-products", "/products/details?product_id=2&collection_id=bad",
 ])
 def test_route_validation(url):
@@ -219,7 +217,7 @@ def test_collection_route_response_schema():
     try:
         r = TestClient(app).get("/api/v1/shopify/products/collections")
         assert r.status_code == 200
-        assert r.json()["collections"][0] == {"id": "1", "title": "Menu label", "url": "/collections/test", "tags": ["Face"]}
+        assert r.json() == {"collections": [{"id": "1", "title": "Menu label"}]}
     finally:
         app.dependency_overrides.clear()
 
@@ -253,7 +251,7 @@ def test_auth_valid_key_reaches_service(monkeypatch):
     client = SimpleNamespace(query_with_retry=AsyncMock(return_value=menu()))
     monkeypatch.setattr(product_browsing, "get_shopify_service", lambda request: SimpleNamespace(client=client))
     r = TestClient(app).get("/api/v1/shopify/products/collections", headers={"X-API-Key": "test-key"})
-    assert r.status_code == 200 and r.json()["total"] == 0
+    assert r.status_code == 200 and r.json() == {"collections": []}
 
 
 async def test_three_decimal_currency_preserved_in_message():
@@ -273,7 +271,7 @@ def test_summary_query_avoids_nested_variant_options():
 
 async def test_duplicate_first_tags_and_label_win():
     s = service(menu([link(title="First", tags=["Face"]), link(title="Second")]))
-    r = await s.collections()
+    r = await s._menu_collections()
     assert r.collections[0].tags == ["Face"] and r.collections[0].title == "First"
 
 
@@ -361,8 +359,8 @@ def test_collection_routes_accept_gids(query_alias):
         path = "/collection-products" if query_alias else f"/collections/{C}/products"
         params = {"collection_id": C} if query_alias else {}
         r = TestClient(app).get("/api/v1/shopify/products" + path, params=params)
-        assert r.status_code == 200 and r.json()["collection_id"] == C
-        assert r.json()["products"][0]["price"] == "10.00"
+        assert r.status_code == 200
+        assert r.json() == {"products": [{"id": "2", "title": product()["title"]}]}
     finally:
         app.dependency_overrides.clear()
 
@@ -450,38 +448,38 @@ async def test_confirmed_pkr_uses_rupee_label_in_message():
     assert r.currency == "PKR" and "Price: Rs. 10" in r.whatsapp_message
 
 @pytest.mark.parametrize("count", [0, 4, 9, 10, 18, 23])
-async def test_collection_pages_and_more(count):
-    links = [link(f"gid://shopify/Collection/{i}") for i in range(1, count + 1)]
-    items = [{"type": "PAGE", "items": links}, *links]  # nested and duplicate links
-    s = service(*[menu(items) for _ in range(5)])
-    seen = []
-    page_number = 1
-    while True:
-        result = await s.collections(page=page_number)
-        assert len(result.collections) <= 10
-        assert result.total == count
-        assert result.page == page_number
-        real = [c for c in result.collections if not c.id.startswith("PAGE:")]
-        seen.extend(c.id for c in real)
-        assert "more" not in result.model_dump()
-        if not result.has_next:
-            assert len(real) == len(result.collections)
-            break
-        assert len(result.collections) == 10
-        assert result.collections[-1].model_dump() == {"id": f"PAGE:{page_number + 1}", "title": "More Categories ?"}
-        page_number = int(result.collections[-1].id.split(":")[1])
-    assert seen == [str(i) for i in range(1, count + 1)]
-    beyond = await s.collections(page=page_number + 1)
-    assert beyond.collections == [] and beyond.has_next is False
+async def test_all_collection_options_without_more_or_metadata(count):
+    links = [link(f"gid://shopify/Collection/{i}", tags=["Face"]) for i in range(1, count + 1)]
+    result = await service(menu([{"type": "PAGE", "items": links}, *links])).collection_options()
+    assert result.model_dump() == {"collections": [{"id": str(i), "title": "Menu label"} for i in range(1, count + 1)]}
 
 
-@pytest.mark.parametrize("value", [0, -1])
-async def test_collection_page_must_be_positive(value):
-    s = service()
-    with pytest.raises(Exception) as exc:
-        await s.collections(page=value)
-    assert exc.value.status == 422
-    s.client.query_with_retry.assert_not_awaited()
+async def test_product_options_follow_filtered_pages_and_return_only_id_title():
+    source = service()
+    from app.schemas.product_browsing import CollectionProducts, Pagination
+    from app.services.product_browsing import _summary
+    source.collection_products = AsyncMock(side_effect=[
+        CollectionProducts(collection_id=C, collection_title="Menu", products=[], pagination=Pagination(has_next_page=True, next_cursor="next")),
+        CollectionProducts(collection_id=C, collection_title="Menu", products=[_summary(product())], pagination=Pagination(has_next_page=False)),
+    ])
+    result = await source.product_options("1")
+    assert result.model_dump() == {"products": [{"id": "2", "title": product()["title"]}]}
+    assert source.collection_products.call_args.kwargs == {"limit": 50, "cursor": "next"}
+
+
+async def test_product_options_never_silently_truncate_or_loop():
+    from app.schemas.product_browsing import CollectionProducts, Pagination, BrowsingError
+    source = service()
+    source.collection_products = AsyncMock(side_effect=[CollectionProducts(collection_id=C, collection_title="Menu", products=[],
+        pagination=Pagination(has_next_page=True, next_cursor=f"cursor{i}")) for i in range(20)])
+    with pytest.raises(BrowsingError) as exc:
+        await source.product_options("1")
+    assert exc.value.status == 503
+    batch = CollectionProducts(collection_id=C, collection_title="Menu", products=[], pagination=Pagination(has_next_page=True, next_cursor="same"))
+    source.collection_products = AsyncMock(return_value=batch)
+    with pytest.raises(BrowsingError) as exc:
+        await source.product_options("1")
+    assert exc.value.status == 502
 
 
 async def test_collection_beyond_display_limit_remains_menu_authorized():

@@ -9,14 +9,12 @@ from app.clients.product_queries import (
     PRODUCT_MENU_ID, MENU_QUERY, COLLECTION_PRODUCTS_QUERY, PRODUCT_DETAILS_QUERY,
     VARIANTS_QUERY, MEMBERSHIP_QUERY, PRODUCT_COLLECTIONS_QUERY,
 )
-from app.messaging.product_messages import COLLECTION_MORE_TITLE
 from app.messaging.product_formatter import clean_description, format_product
 from app.schemas.product_browsing import (
     BrowsingError, MenuCollection, MenuCollections, CollectionNavigation, ProductSummary,
-    Pagination, CollectionProducts, ProductDetails, ProductVariant,
+    Pagination, CollectionProducts, ProductDetails, ProductVariant, CollectionOptions, ProductOptions,
 )
 
-COLLECTION_PAGE_SIZE = 9
 MAX_COLLECTION_PAGES = 10
 MAX_VARIANT_PAGES = 20  # 1,000 variants, including the first page
 MAX_MEMBERSHIP_PAGES = 20
@@ -107,6 +105,26 @@ class ProductBrowsingService:
     def __init__(self, client: ShopifyClient):
         self.client = client
 
+    async def collection_options(self) -> CollectionOptions:
+        menu = await self._menu_collections()
+        return CollectionOptions(collections=[CollectionNavigation(
+            id=item.id.rsplit("/", 1)[-1], title=item.title) for item in menu.collections])
+
+    async def product_options(self, collection_id: str) -> ProductOptions:
+        products = []
+        cursor = None
+        seen = set()
+        for _ in range(20):
+            batch = await self.collection_products(collection_id, limit=50, cursor=cursor)
+            products.extend(CollectionNavigation(id=p.id.rsplit("/", 1)[-1], title=p.title) for p in batch.products)
+            if not batch.pagination.has_next_page:
+                return ProductOptions(products=products)
+            cursor = batch.pagination.next_cursor
+            if not cursor or cursor in seen:
+                raise BrowsingError(502, "invalid_upstream_response", "The shop could not complete this request. Please try again.")
+            seen.add(cursor)
+        raise _budget()
+
     async def _load_variants(self, product: dict, *, complete: bool) -> None:
         """Details need all variants; listing needs enough to find the first available."""
         connection = product["variants"]
@@ -124,18 +142,6 @@ class ProductBrowsingService:
         if after and (complete or not any(v.get("availableForSale") for v in variants)):
             raise _budget()
         product["variants"] = {"nodes": variants, "pageInfo": {"hasNextPage": after is not None, "endCursor": after}}
-
-    async def collections(self, page: int = 1) -> MenuCollections:
-        if page < 1:
-            raise BrowsingError(422, "invalid_page", "Page must be a positive integer.")
-        menu = await self._menu_collections()
-        start = (page - 1) * COLLECTION_PAGE_SIZE
-        displayed = [collection.model_copy(update={"id": collection.id.rsplit("/", 1)[-1]})
-                     for collection in menu.collections[start:start + COLLECTION_PAGE_SIZE]]
-        has_next = start + len(displayed) < menu.total
-        if has_next:
-            displayed.append(CollectionNavigation(id=f"PAGE:{page + 1}", title=COLLECTION_MORE_TITLE))
-        return menu.model_copy(update={"collections": displayed, "page": page, "has_next": has_next})
 
     async def _menu_collections(self) -> MenuCollections:
         data = await self.client.query_with_retry(MENU_QUERY, {"menuId": PRODUCT_MENU_ID})

@@ -13,7 +13,7 @@ from fastapi.security import APIKeyHeader
 from app.api.dependencies import get_shopify_service
 from app.core.config import ConfigurationError, _read
 from app.core.exceptions import ShopifyAPIError, ShopifyAuthenticationError
-from app.schemas.product_browsing import BrowsingError, BrowsingErrorResponse, MenuCollections, CollectionProducts, ProductDetails
+from app.schemas.product_browsing import BrowsingError, BrowsingErrorResponse, CollectionOptions, ProductOptions, ProductDetails
 from app.services.product_browsing import ProductBrowsingService
 
 logger = logging.getLogger(__name__)
@@ -67,19 +67,17 @@ router = APIRouter(prefix="/products", tags=["Product browsing"], route_class=Pr
                    responses={s: {"model": BrowsingErrorResponse} for s in (401, 404, 422, 500, 502, 503)})
 
 
-@router.get("/collections", response_model=MenuCollections)
-async def menu_collections(page: int = Query(1, ge=1),
-                           service: ProductBrowsingService = Depends(get_product_browsing_service)):
+@router.get("/collections", response_model=CollectionOptions)
+async def menu_collections(service: ProductBrowsingService = Depends(get_product_browsing_service)):
     """Collections linked by the configured navigation menu, in menu order."""
-    return await service.collections(page=page)
+    return await service.collection_options()
 
 
-@router.get("/collection-products", response_model=CollectionProducts)
-async def collection_products_query(collection_id: str = Query(..., max_length=100), limit: int = Query(10, ge=1, le=50),
-                                    cursor: str | None = Query(None, min_length=1, max_length=2048),
+@router.get("/collection-products", response_model=ProductOptions)
+async def collection_products_query(collection_id: str = Query(..., max_length=100),
                                     service: ProductBrowsingService = Depends(get_product_browsing_service)):
     """Query-parameter alias for slash-containing Shopify collection GIDs."""
-    return await service.collection_products(collection_id, limit, cursor)
+    return await service.product_options(collection_id)
 
 
 @router.get("/details", response_model=ProductDetails)
@@ -89,12 +87,11 @@ async def product_details_query(product_id: str = Query(..., max_length=100), co
     return await service.product_details(product_id, collection_id)
 
 
-@router.get("/collections/{collection_id:path}/products", response_model=CollectionProducts)
-async def collection_products(collection_id: str, limit: int = Query(10, ge=1, le=50),
-                              cursor: str | None = Query(None, min_length=1, max_length=2048),
+@router.get("/collections/{collection_id:path}/products", response_model=ProductOptions)
+async def collection_products(collection_id: str,
                               service: ProductBrowsingService = Depends(get_product_browsing_service)):
     """Visible products belonging to an allowed collection. Numeric IDs are convenient in paths."""
-    return await service.collection_products(collection_id, limit, cursor)
+    return await service.product_options(collection_id)
 
 
 @router.get("/{product_id:path}", response_model=ProductDetails)
