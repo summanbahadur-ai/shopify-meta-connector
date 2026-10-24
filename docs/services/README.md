@@ -10,7 +10,7 @@ by purpose. They do not imply separate deployed services.
 | [shared.md](shared.md) | Settings, Shopify authentication, HTTP calls, errors |
 | [shop.md](shop.md) | Connection test |
 | [product.md](product.md) | Menu-based WhatsApp browsing, visibility, authentication, and messages |
-| [whatsapp-product-card.md](whatsapp-product-card.md) | WhatChimp interactive product-card submission |
+| [whatsapp-product-card.md](whatsapp-product-card.md) | Selected-product image caption and website-link submission |
 | [whatsapp-product-carousel.md](whatsapp-product-carousel.md) | Shopify carousel preview; WhatChimp send mapping pending |
 | [whatsapp-button-details.md](whatsapp-button-details.md) | Manual View Details button callbacks and text replies |
 | [orders.md](orders.md) | Validated order-status lookup and natural-language messages |

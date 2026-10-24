@@ -391,11 +391,12 @@ uv run pywrangler deploy
 
 ## WhatChimp interactive product cards
 
-POST `/api/whatsapp/product-card` submits one Shopify product as an interactive
-reply-button message. It requires separate WhatChimp credentials and an inbound
-API key. See the [product-card service guide](docs/services/whatsapp-product-card.md)
-for setup, Swagger use, request/response examples, flow mapping, tests, and
-endpoint-specific compatibility checks still needed before production use.
+POST `/api/whatsapp/product-card` accepts `phone_number` and `product_id`, fetches
+live Shopify details, and sends an image with a formatted caption and clickable
+product website link through WhatChimp's Send Media API. Missing images use text.
+It requires WhatChimp credentials and the existing inbound X-API-Key. See the
+[product-card service guide](docs/services/whatsapp-product-card.md) for the new
+request/response, flow setup, formatting limits and test instructions.
 
 ## Shopify carousel preview
 

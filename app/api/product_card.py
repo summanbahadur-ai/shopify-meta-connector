@@ -27,7 +27,7 @@ class ProductCardRoute(APIRoute):
             except CardError as exc:
                 error = exc
             except RequestValidationError:
-                error = CardError(422, "invalid_request", "Provide a digits-only international phone number, valid collection ID and non-negative product index.")
+                error = CardError(422, "invalid_request", "Provide a digits-only international phone number, valid Shopify product ID.")
             except ConfigurationError:
                 error = CardError(503, "configuration_error", "Product card sending is not configured.")
             except BrowsingError as exc:

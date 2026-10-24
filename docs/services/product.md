@@ -233,11 +233,12 @@ query ProductMenuMembership($productId: ID!, $after: String) {
 
 ## Interactive WhatChimp product cards
 
-POST `/api/whatsapp/product-card` reuses this browsing service to submit one
-interactive product card, protected by a separate inbound key. See
-[whatsapp-product-card.md](whatsapp-product-card.md) for its complete contract,
-settings, examples, WhatChimp HTTP block setup, limits, and unverified API details.
-Existing browsing responses and access rules remain unchanged.
+POST `/api/whatsapp/product-card` accepts the selected product_id and customer
+phone_number, retrieves current authorized product details and submits one image
+message with a formatted caption and clickable product website link. It uses the
+existing inbound X-API-Key. See [whatsapp-product-card.md](whatsapp-product-card.md)
+for the new request, media transport, text fallback and caption limits. Cart and
+checkout continue on the website; this endpoint sends no reply buttons.
 
 ## Multi-product carousel preview
 

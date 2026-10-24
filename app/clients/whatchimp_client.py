@@ -1,4 +1,3 @@
-import json
 import httpx
 from app.schemas.product_card import CardError
 
@@ -20,12 +19,17 @@ class WhatChimpClient:
         self.last_diagnostics = None
 
     async def send_card(self, phone_number, card):
-        fields = {**card, "apiToken": self.settings.api_token,
+        fields = {"apiToken": self.settings.api_token,
                   "phone_number_id": self.settings.phone_number_id, "phone_number": phone_number}
-        fields["buttons"] = json.dumps(fields["buttons"])
+        if card.get("media_url"):
+            endpoint = "/whatsapp/send/file"
+            fields.update(media_url=card["media_url"], media_type="image", media_caption_text=card["message"])
+        else:
+            endpoint = "/whatsapp/send"
+            fields["message"] = card["message"]
         try:
             async with httpx.AsyncClient(timeout=20, follow_redirects=False, transport=self.transport) as client:
-                response = await client.post(self.settings.base_url + "/whatsapp/send/interactive-buttons", data=fields)
+                response = await client.post(self.settings.base_url + endpoint, data=fields)
         except httpx.TimeoutException:
             raise CardError(504, "whatchimp_timeout", "WhatChimp did not respond in time. Send status is unknown; check before retrying.") from None
         except httpx.RequestError:

@@ -1,35 +1,55 @@
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 import re
+from urllib.parse import urlsplit
 from app.messaging import product_card_messages as M
+from app.messaging.product_formatter import clean_description
 from app.schemas.product_card import CardError
 
+CAPTION_LIMIT = 1024
 
-def build_product_card(product, product_index, total_products, *, collection_id=None):
-    if product.currency != "PKR":
-        raise CardError(422, "unsupported_currency", "Product cards require Shopify prices in PKR.")
-    product_id = product.id.rsplit("/", 1)[-1]
-    if not re.fullmatch(r"[1-9][0-9]{0,19}", product_id):
-        raise CardError(502, "invalid_product", "The shop returned an invalid product.")
-    title = re.sub(r"[*_~`\n\r]", " ", product.title).strip()[:200]
-    price = format(Decimal(product.price), ",f")
-    if "." in price:
-        price = price.rstrip("0").rstrip(".")
-    parts = [f"*{title}*", f"{M.PRICE_LABEL}: PKR {price}"]
-    parts.append(M.POSITION.format(position=product_index + 1, total=total_products))
-    buttons = [{"id": f"DETAILS:{product_id}", "title": M.DETAILS_TITLE},
-               {"id": f"ADD:{product_id}", "title": M.ADD_TITLE}]
-    if product_index + 1 < total_products:
-        if collection_id is None:
-            raise CardError(422, "missing_context", "Collection context is required for navigation.")
-        numeric = collection_id.rsplit("/", 1)[-1]
-        buttons.append({"id": f"NEXT:{numeric}:{product_index + 1}", "title": M.NEXT_TITLE})
-    else:
-        buttons.append({"id": "CATEGORIES:1", "title": M.BACK_TITLE})
-    if any(len(b["id"]) > 256 or len(b["title"]) > 20 for b in buttons):
-        raise CardError(422, "invalid_buttons", "The product navigation could not be built.")
-    payload = {"message": "\n\n".join(parts), "buttons": buttons, "button_footer_text": M.FOOTER}
-    if product.image_url:
-        payload["media_url"] = product.image_url
-    else:
-        payload["button_header_text"] = title[:60]
-    return payload
+
+def _amount(value):
+    try:
+        number = Decimal(value)
+        if not number.is_finite() or number < 0:
+            raise ValueError()
+        return number
+    except (InvalidOperation, ValueError, TypeError):
+        raise CardError(502, "invalid_product", "The shop returned invalid product pricing.") from None
+
+
+def _money(amount, currency):
+    value = format(amount, ",f")
+    if "." in value:
+        value = value.rstrip("0").rstrip(".")
+    return currency + " " + value
+
+
+def build_product_card(product):
+    title = re.sub(r"[*_~`\n\r]", " ", product.title).strip()[:160]
+    url = product.product_url
+    parts = urlsplit(url)
+    if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or any(c.isspace() for c in url):
+        raise CardError(502, "invalid_product", "The shop returned an invalid product link.")
+    price = _amount(product.price)
+    original = _amount(product.compare_at_price) if product.compare_at_price else None
+    sale = original is not None and original > price
+    heading = [f"*{title}*", f"*{M.CURRENT_PRICE_LABEL}:* {_money(price, product.currency)}",
+               f"*{M.SALE_LABEL}:* {M.YES if sale else M.NO}"]
+    if sale:
+        heading.append(f"*{M.ORIGINAL_LABEL}:* {_money(original, product.currency)}")
+    heading.append(M.AVAILABLE if product.available else M.UNAVAILABLE)
+    top = "\n\n".join(heading)
+    bottom = f"\n\n*{M.SHOP_LABEL}*\n{url}"
+    remaining = CAPTION_LIMIT - len(top) - len(bottom)
+    if remaining < 0:
+        raise CardError(422, "product_caption_limit", "The product link is too long for a product card.")
+    description = clean_description(product.description, "")
+    label = f"\n\n*{M.DESCRIPTION_LABEL}*\n"
+    section = ""
+    if description and remaining > len(label) + 3:
+        room = remaining - len(label)
+        if len(description) > room:
+            description = description[:room - 3].rstrip() + "..."
+        section = label + description
+    return {"message": top + section + bottom, "media_url": product.image_url, "on_sale": sale}
