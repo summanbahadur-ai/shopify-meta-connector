@@ -138,7 +138,15 @@ A request containing a real token and recipient now sends a real text message;
 unit tests mock all external clients. Existing product-card tests remain unchanged.
 No deployment or real customer messages are performed during this code change.
 
-Worker packaging is still unverified locally: the earlier Windows Pyodide
-interpreter failed with `ModuleNotFoundError: No module named python` before
-bundling. The supported dependency range allows Worker cryptography 45.0.5 and
-local 49.0.0. Verify the existing Linux CI sync/preflight/dry-run before deployment.
+## Worker packaging
+
+Worker sync resolves cryptography 45.0.5 from the compatible Pyodide index; local
+Python may resolve a newer supported version. All cryptography/cffi runtime files
+remain included. `wrangler.jsonc` omits Uvicorn (not used by the Worker's
+`workers.asgi` entrypoint) and wheel installation bookkeeping files `RECORD`,
+`WHEEL`, `INSTALLER`, `REQUESTED`. Distribution METADATA, entry-point metadata,
+licenses, full-number validation data and native crypto bindings remain.
+
+The project upload-part guard remains below 950. Re-run GitHub Actions to verify
+actual vendor counts and Wrangler dry-run output: a representative local count
+regression and import-isolation test do not prove a Cloudflare deployment succeeds.

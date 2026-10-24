@@ -302,6 +302,12 @@ Wrangler's `base_dir` points at `.cache/worker-source`; the configured build com
 copies only `app/` there. This prevents virtual environments, tests, and duplicate
 vendor Python files from entering the upload through the source scan. Continue
 editing root `app/` and `worker.py`; staging happens automatically when packaging.
+Worker exclusions also omit Uvicorn (the local development server) and wheel
+installation bookkeeping (`RECORD`, `WHEEL`, `INSTALLER`, `REQUESTED`). Package
+`METADATA`, entry-point metadata and licenses remain, as do all cryptography
+runtime modules. The Worker uses `workers.asgi`, while local Uvicorn remains
+installed and available. The 950-part project guard is unchanged.
+
 Supported exclusions in `wrangler.jsonc` remove
 unused DNS lookup modules and phone short-code regional data, while preserving
 full international phone-number validation. The file-count guard is a project

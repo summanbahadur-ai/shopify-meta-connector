@@ -137,3 +137,69 @@ def test_actual_bundle_guard_reports_only_deployment_files(tmp_path, capsys):
     tree(tmp_path, ["worker.py", "app/main.py", "python_modules/pkg/__init__.py", "README.md"])
     assert check_built_bundle(tmp_path) == 0
     assert "files=3" in capsys.readouterr().out
+
+
+
+def test_worker_omits_local_server_and_installation_bookkeeping(tmp_path, capsys):
+    config(tmp_path)
+    tree(tmp_path, ["worker.py", ".cache/worker-source/app/main.py",
+        "python_modules/uvicorn/__init__.py", "python_modules/uvicorn/protocols/http/h11_impl.py",
+        "python_modules/pkg-1.dist-info/RECORD", "python_modules/pkg-1.dist-info/WHEEL",
+        "python_modules/pkg-1.dist-info/INSTALLER", "python_modules/pkg-1.dist-info/REQUESTED",
+        "python_modules/pkg-1.dist-info/METADATA", "python_modules/pkg-1.dist-info/entry_points.txt",
+        "python_modules/pkg-1.dist-info/licenses/LICENSE",
+        "python_modules/cryptography/fernet.py", "python_modules/cryptography/hazmat/bindings/_rust.so",
+        "python_modules/cffi/api.py", "python_modules/_cffi_backend.so"])
+    assert check_bundle(tmp_path) == 0
+    output = capsys.readouterr().out
+    assert "raw=13 excluded=6 included=7" in output
+
+
+def test_reported_ci_file_count_fits_after_runtime_exclusions(tmp_path, capsys):
+    config(tmp_path)
+    tree(tmp_path, ["worker.py", *[f".cache/worker-source/app/module_{i}.py" for i in range(49)]])
+    # Reproduce the reported 990 included vendor files with representative server
+    # and wheel-install metadata. This is a guard regression, not an actual CI build.
+    names = [f"uvicorn/module_{i}.py" for i in range(45)]
+    names += [f"pkg_{i}-1.dist-info/{name}" for i in range(22)
+              for name in ("RECORD", "WHEEL", "INSTALLER", "REQUESTED")]
+    names += [f"runtime/module_{i}.py" for i in range(990 - len(names))]
+    tree(tmp_path, ["python_modules/" + name for name in names])
+    assert check_bundle(tmp_path) == 0
+    assert "estimated_parts=923" in capsys.readouterr().out
+
+
+
+def test_worker_app_and_fernet_do_not_need_uvicorn():
+    code = r"""
+import importlib.abc
+import sys
+class ExcludedServer(importlib.abc.MetaPathFinder):
+    def find_spec(self, fullname, path=None, target=None):
+        if fullname == "uvicorn" or fullname.startswith("uvicorn."):
+            raise ModuleNotFoundError("Uvicorn is not bundled in the Worker")
+sys.meta_path.insert(0, ExcludedServer())
+from app.main import app
+from fastapi.testclient import TestClient
+from cryptography.fernet import Fernet, MultiFernet
+key = Fernet.generate_key()
+cipher = MultiFernet([Fernet(key)])
+token = cipher.encrypt(b"worker-fernet-import-check")
+assert cipher.decrypt(token) == b"worker-fernet-import-check"
+assert TestClient(app).get("/health").status_code == 200
+assert "/api/whatsapp/button-click" in app.openapi()["paths"]
+"""
+    result = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_distribution_version_lookup_keeps_metadata_without_install_records(tmp_path):
+    import importlib.metadata
+    metadata = tmp_path / "bundle_probe-1.2.3.dist-info" / "METADATA"
+    metadata.parent.mkdir()
+    metadata.write_text("Metadata-Version: 2.1\nName: bundle-probe\nVersion: 1.2.3\n", encoding="utf-8")
+    sys.path.insert(0, str(tmp_path))
+    try:
+        assert importlib.metadata.version("bundle-probe") == "1.2.3"
+    finally:
+        sys.path.remove(str(tmp_path))

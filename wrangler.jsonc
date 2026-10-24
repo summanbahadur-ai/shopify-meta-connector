@@ -12,7 +12,12 @@
       "**/*.pyi",
       "**/py.typed",
       "dns/**",
-      "phonenumbers/shortdata/region_*.py"
+      "phonenumbers/shortdata/region_*.py",
+      "uvicorn/**",
+      "*.dist-info/RECORD",
+      "*.dist-info/WHEEL",
+      "*.dist-info/INSTALLER",
+      "*.dist-info/REQUESTED"
     ]
   },
   "vars": {
