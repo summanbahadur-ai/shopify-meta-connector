@@ -26,8 +26,12 @@ are accepted as inputs. List responses use numeric strings; detail responses
 retain full Shopify GIDs and actual variant IDs.
 
 GET /products/collections?page=1 returns the first nine unique valid menu
-collections in menu order. page defaults to 1 when omitted or empty (`?page=`), and accepts only 1 or 2; other
-values return 422. When more than nine collections exist, page 1 appends a final
+collections in menu order. page defaults to 1 when omitted, empty (`?page=`), whitespace-only, or the
+unresolved WhatChimp placeholder `#v_selected_collection_id#`. Other inputs
+must be 1 or 2; unsupported
+values return 422. Whitespace around 1 or 2 is trimmed. Pass the selected More
+row id (2), not an actual Shopify collection ID, as the next page value.
+When more than nine collections exist, page 1 appends a final
 navigation row `{"id": "2", "title": "More"}`. The id is the next page number,
 not a Shopify collection ID. On selecting More, call the same endpoint with
 page=2 instead of querying products for collection 2. Page 2 returns collections

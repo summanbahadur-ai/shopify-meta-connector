@@ -537,7 +537,8 @@ async def test_listing_returns_real_selected_variant_id(later_page):
     assert result.price == "12.50"
 
 
-@pytest.mark.parametrize("query", ["", "?page=", "?page=1"])
+@pytest.mark.parametrize("query", ["", "?page=", "?page=1", "?page=%20%20",
+    "?page=%23v_selected_collection_id%23", "?page=#v_selected_collection_id#"])
 def test_empty_or_missing_collection_page_defaults_to_first(query):
     from app.api.product_browsing import get_product_browsing_service
     source = service(menu([link()]))

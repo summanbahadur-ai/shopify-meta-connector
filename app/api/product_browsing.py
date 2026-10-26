@@ -3,8 +3,6 @@ from __future__ import annotations
 import hmac
 import logging
 import os
-from typing import Annotated
-from pydantic import BeforeValidator
 
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -70,11 +68,15 @@ router = APIRouter(prefix="/products", tags=["Product browsing"], route_class=Pr
 
 
 @router.get("/collections", response_model=CollectionOptions)
-async def menu_collections(page: Annotated[int, Query(ge=1, le=2),
-                                         BeforeValidator(lambda value: 1 if value == "" else value)] = 1,
+async def menu_collections(page: str = Query("1", description="1 or 2; empty values default to page 1."),
                            service: ProductBrowsingService = Depends(get_product_browsing_service)):
     """Collections linked by the configured navigation menu, in menu order."""
-    return await service.collection_options(page=page)
+    value = page.strip()
+    if value in ("", "#v_selected_collection_id#"):
+        value = "1"
+    if value not in ("1", "2"):
+        raise BrowsingError(422, "invalid_page", "Page must be 1 or 2; leave it empty for page 1.")
+    return await service.collection_options(page=int(value))
 
 
 @router.get("/collection-products", response_model=ProductOptions)
