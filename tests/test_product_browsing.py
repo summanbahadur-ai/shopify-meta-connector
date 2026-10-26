@@ -447,11 +447,44 @@ async def test_confirmed_pkr_uses_rupee_label_in_message():
     r = await service(menu([link()]), {"product": p}, {"product": {"inCollection": True}}).product_details(P, C)
     assert r.currency == "PKR" and "Price: Rs. 10" in r.whatsapp_message
 
-@pytest.mark.parametrize("count", [0, 4, 9, 10, 18, 23])
-async def test_all_collection_options_without_more_or_metadata(count):
-    links = [link(f"gid://shopify/Collection/{i}", tags=["Face"]) for i in range(1, count + 1)]
-    result = await service(menu([{"type": "PAGE", "items": links}, *links])).collection_options()
-    assert result.model_dump() == {"collections": [{"id": str(i), "title": "Menu label"} for i in range(1, count + 1)]}
+@pytest.mark.parametrize("count", [0, 4, 9, 10, 11, 18])
+async def test_two_collection_pages_and_more(count):
+    links = [link(f"gid://shopify/Collection/{100+i}", tags=["Face"]) for i in range(1, count + 1)]
+    source = service(menu(links), menu(links))
+    first = (await source.collection_options()).model_dump()
+    expected = [{"id": str(100+i), "title": "Menu label"} for i in range(1, min(count, 9)+1)]
+    if count > 9:
+        expected.append({"id": "2", "title": "More"})
+    assert first == {"collections": expected}
+    second = await source.collection_options(page=2)
+    assert second.model_dump() == {"collections": [{"id": str(100+i), "title": "Menu label"} for i in range(10, count+1)]}
+
+
+@pytest.mark.parametrize("page", [0, -1, 3])
+async def test_invalid_collection_page_fails_before_shopify(page):
+    from app.schemas.product_browsing import BrowsingError
+    source = service()
+    with pytest.raises(BrowsingError) as exc:
+        await source.collection_options(page=page)
+    assert exc.value.status == 422
+    source.client.query_with_retry.assert_not_awaited()
+
+
+def test_collection_page_query_http():
+    from app.api.product_browsing import get_product_browsing_service
+    links = [link(f"gid://shopify/Collection/{100+i}") for i in range(1, 12)]
+    app.dependency_overrides[get_product_browsing_service] = lambda: service(menu(links))
+    try:
+        client = TestClient(app)
+        first = client.get("/api/v1/shopify/products/collections?page=1")
+        assert first.status_code == 200 and first.json()["collections"][-1] == {"id": "2", "title": "More"}
+        second = client.get("/api/v1/shopify/products/collections?page=2")
+        assert second.status_code == 200 and len(second.json()["collections"]) == 2
+        assert second.json()["collections"][0]["id"] == "110"
+        for value in ["0", "3", "bad"]:
+            assert client.get("/api/v1/shopify/products/collections?page=" + value).status_code == 422
+    finally:
+        app.dependency_overrides.pop(get_product_browsing_service, None)
 
 
 async def test_product_options_follow_filtered_pages_and_return_only_id_title():
@@ -502,3 +535,16 @@ async def test_listing_returns_real_selected_variant_id(later_page):
     result = (await service(*responses).collection_products(C)).products[0]
     assert result.variant_id == "gid://shopify/ProductVariant/987654321"
     assert result.price == "12.50"
+
+
+@pytest.mark.parametrize("query", ["", "?page=", "?page=1"])
+def test_empty_or_missing_collection_page_defaults_to_first(query):
+    from app.api.product_browsing import get_product_browsing_service
+    source = service(menu([link()]))
+    app.dependency_overrides[get_product_browsing_service] = lambda: source
+    try:
+        result = TestClient(app).get("/api/v1/shopify/products/collections" + query)
+        assert result.status_code == 200
+        assert result.json() == {"collections": [{"id": "1", "title": "Menu label"}]}
+    finally:
+        app.dependency_overrides.pop(get_product_browsing_service, None)

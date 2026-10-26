@@ -3,6 +3,8 @@ from __future__ import annotations
 import hmac
 import logging
 import os
+from typing import Annotated
+from pydantic import BeforeValidator
 
 from fastapi import APIRouter, Depends, Query, Request, HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -68,9 +70,11 @@ router = APIRouter(prefix="/products", tags=["Product browsing"], route_class=Pr
 
 
 @router.get("/collections", response_model=CollectionOptions)
-async def menu_collections(service: ProductBrowsingService = Depends(get_product_browsing_service)):
+async def menu_collections(page: Annotated[int, Query(ge=1, le=2),
+                                         BeforeValidator(lambda value: 1 if value == "" else value)] = 1,
+                           service: ProductBrowsingService = Depends(get_product_browsing_service)):
     """Collections linked by the configured navigation menu, in menu order."""
-    return await service.collection_options()
+    return await service.collection_options(page=page)
 
 
 @router.get("/collection-products", response_model=ProductOptions)

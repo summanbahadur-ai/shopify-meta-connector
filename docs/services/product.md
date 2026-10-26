@@ -25,8 +25,16 @@ All paths have prefix /api/v1/shopify. Numeric IDs and matching Shopify GIDs
 are accepted as inputs. List responses use numeric strings; detail responses
 retain full Shopify GIDs and actual variant IDs.
 
-GET /products/collections returns all unique valid menu collections in menu order.
-There is no page parameter, More row or pagination metadata. It returns only:
+GET /products/collections?page=1 returns the first nine unique valid menu
+collections in menu order. page defaults to 1 when omitted or empty (`?page=`), and accepts only 1 or 2; other
+values return 422. When more than nine collections exist, page 1 appends a final
+navigation row `{"id": "2", "title": "More"}`. The id is the next page number,
+not a Shopify collection ID. On selecting More, call the same endpoint with
+page=2 instead of querying products for collection 2. Page 2 returns collections
+from position 10 onward with no More row. This is explicitly a two-page scheme;
+page 2 returns all remaining entries (it is not capped at nine). The response
+still contains only the collections array, without pagination metadata:
+
 
 ```json
 {
@@ -89,8 +97,8 @@ The options aggregator follows up to 20 service pages, requesting limit=50;
 each service page scans up to 10 Shopify pages of up to 10 products. Missing or
 repeated continuation cursors fail with 502. All results are buffered before
 returning, so very large collections may exceed Worker execution budgets.
-Collections have no artificial display cap. These endpoints do not enforce
-WhatsApp's 10-row interactive-list limit; the caller must choose its display UI.
+Page 1 has at most ten rows including More. Page 2 contains all remaining
+collections; this two-page scheme assumes the current menu fits the chosen UI.
 
 Rich internal summaries and details keep full sanitized descriptions, one
 selling price/currency from the first available variant (first variant if all
@@ -109,7 +117,8 @@ X-API-Key. Map the collections array using id/title. Save the chosen collection
 ID, then call /api/v1/shopify/products/collection-products?collection_id=SELECTED_ID
 with the same header. Map products using id/title; use the selected product ID
 for the details API or the separate View Details webhook integration.
-Remove former total/menu/tag/URL and pagination mappings from the flow.
+Remove former total/menu/tag/URL mappings. Branch on the More navigation row
+before treating its id as a Shopify collection ID; request page=2 when selected.
 
 ```powershell
 uv run uvicorn app.main:app --reload --host 127.0.0.1 --port 8000

@@ -162,7 +162,7 @@ Expected shape:
 | GET | `/` | Service information |
 | GET | `/health` | Liveness check |
 | GET | `/api/v1/shopify/connection` | Verify Shopify authentication/API connection |
-| GET | `/api/v1/shopify/products/collections` | All menu collections as id/title pairs (X-API-Key required) |
+| GET | `/api/v1/shopify/products/collections` | Two-page collection list; page 1 has nine collections plus More (X-API-Key required) |
 | GET | `/api/v1/shopify/products/collections/{collection_id}/products` | All visible collection products as id/title pairs (X-API-Key required) |
 | GET | `/api/v1/shopify/products/{product_id}` | Full product details and WhatsApp message |
 | GET | `/api/v1/shopify/orders/status` | Requires order_number and email; phone optional; returns message and relevant shipment details |
@@ -175,9 +175,11 @@ Send X-API-Key. GET `/api/v1/shopify/products/collections` returns only
 `{"collections": [{"id": "111", "title": "Hair Care"}]}`.
 GET `/api/v1/shopify/products/collections/111/products` returns only
 `{"products": [{"id": "333", "title": "Conditioner"}]}`.
-Both return numeric ID strings and titles without metadata or More rows.
-Shopify pagination is handled internally; public page/limit/cursor inputs are
-no longer used. Full product details remain available through the details API.
+Both return numeric ID strings and titles without metadata. Collections accept
+`page=1` (default when omitted or empty) or `page=2`. Page 1 returns nine collections and, when needed,
+`{"id":"2","title":"More"}`; page 2 returns the remaining collections.
+Product-list Shopify pagination is handled internally; limit/cursor inputs are
+not used. Full product details remain available through the details API.
 See [the product guide](docs/services/product.md) for filtering and work limits.
 
 ## Important order-status security note

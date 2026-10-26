@@ -105,10 +105,15 @@ class ProductBrowsingService:
     def __init__(self, client: ShopifyClient):
         self.client = client
 
-    async def collection_options(self) -> CollectionOptions:
+    async def collection_options(self, page: int = 1) -> CollectionOptions:
+        if type(page) is not int or page not in (1, 2):
+            raise BrowsingError(422, "invalid_page", "Page must be 1 or 2.")
         menu = await self._menu_collections()
-        return CollectionOptions(collections=[CollectionNavigation(
-            id=item.id.rsplit("/", 1)[-1], title=item.title) for item in menu.collections])
+        selected = menu.collections[:9] if page == 1 else menu.collections[9:]
+        rows = [CollectionNavigation(id=item.id.rsplit("/", 1)[-1], title=item.title) for item in selected]
+        if page == 1 and len(menu.collections) > 9:
+            rows.append(CollectionNavigation(id="2", title="More"))
+        return CollectionOptions(collections=rows)
 
     async def product_options(self, collection_id: str) -> ProductOptions:
         products = []
