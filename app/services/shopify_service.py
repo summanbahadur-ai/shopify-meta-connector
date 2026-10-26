@@ -4,6 +4,7 @@ from typing import Any
 
 from app.schemas.order_status import OrderLookup
 from app.services.order_lookup import OrderLookupService
+from app.messaging.policy_formatter import policy_html_to_text
 
 
 SHOP_QUERY = """
@@ -52,8 +53,8 @@ class ShopifyService:
     async def get_policies(self, policy_type: str | None = None) -> list[dict[str, Any]]:
         policies = (await self.client.query(POLICIES_QUERY))["shop"]["shopPolicies"]
         if policy_type is not None:
-            return [policy for policy in policies if policy.get("type") == policy_type]
-        return policies
+            policies = [policy for policy in policies if policy.get("type") == policy_type]
+        return [{**policy, "body": policy_html_to_text(policy.get("body"))} for policy in policies]
 
     async def get_pages(self, limit: int = 50, after: str | None = None, query: str | None = None) -> dict[str, Any]:
         first = min(max(limit, 1), 100)

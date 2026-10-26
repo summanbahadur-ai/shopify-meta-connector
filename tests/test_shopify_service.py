@@ -40,6 +40,7 @@ async def test_policy_type_filter(policy_type, expected):
     client = SimpleNamespace(query=AsyncMock(return_value={"shop": {"shopPolicies": policies}}))
     result = await ShopifyService(client).get_policies(policy_type)
     assert [p["id"] for p in result] == expected
+    assert all("<" not in p["body"] for p in result)
     assert policies[0]["body"] == "<p>Refunds</p>" and len(policies) == 2
     client.query.assert_awaited_once()
 
@@ -56,5 +57,7 @@ def test_policy_http_filter(suffix, expected):
         assert response.status_code == 200
         assert set(response.json()) == {"policies"}
         assert len(response.json()["policies"]) == expected
+        if expected:
+            assert response.json()["policies"][0]["body"] == "Refunds"
     finally:
         app.dependency_overrides.pop(get_shopify_service, None)

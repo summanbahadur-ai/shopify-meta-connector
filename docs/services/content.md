@@ -27,7 +27,19 @@ shop { shopPolicies { id title type body url createdAt updatedAt } }
 Upstream inner data is `{"shop": {"shopPolicies": [<policy objects>]}}`.
 Service returns the policy list; HTTP route wraps it in
 `{"policies": [<policy objects>]}` with HTTP 200. Empty list becomes
-`{"policies": []}`. HTML in `body` is returned unchanged.
+`{"policies": []}`. `body` is converted to readable plain text by
+`app/messaging/policy_formatter.py::policy_html_to_text`. Paragraphs and headings
+are separated with blank lines; line breaks, bullet lists and numbered lists
+remain readable. HTML entities are decoded, script/style/template content and
+comments are omitted, and safe HTTP(S), email and telephone link targets are
+retained beside their labels. Policy wording is not summarized or truncated.
+Empty/null bodies become an empty string. Other policy fields and filtering
+remain unchanged; upstream objects are copied rather than mutated. FAQ/page HTML
+is unaffected.
+
+Example: `<h2>Returns</h2><p>Keep your receipt.</p>` becomes
+`Returns\n\nKeep your receipt.` in the JSON body field. JSON escapes the newlines;
+the consuming application should display the decoded string.
 
 ## Internal page lookup
 
