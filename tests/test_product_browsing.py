@@ -454,7 +454,7 @@ async def test_two_collection_pages_and_more(count):
     first = (await source.collection_options()).model_dump()
     expected = [{"id": str(100+i), "title": "Menu label"} for i in range(1, min(count, 9)+1)]
     if count > 9:
-        expected.append({"id": "2", "title": "More"})
+        expected.append({"id": "2", "title": "More Categories"})
     assert first == {"collections": expected}
     second = await source.collection_options(page=2)
     assert second.model_dump() == {"collections": [{"id": str(100+i), "title": "Menu label"} for i in range(10, count+1)]}
@@ -477,7 +477,7 @@ def test_collection_page_query_http():
     try:
         client = TestClient(app)
         first = client.get("/api/v1/shopify/products/collections?page=1")
-        assert first.status_code == 200 and first.json()["collections"][-1] == {"id": "2", "title": "More"}
+        assert first.status_code == 200 and first.json()["collections"][-1] == {"id": "2", "title": "More Categories"}
         second = client.get("/api/v1/shopify/products/collections?page=2")
         assert second.status_code == 200 and len(second.json()["collections"]) == 2
         assert second.json()["collections"][0]["id"] == "110"

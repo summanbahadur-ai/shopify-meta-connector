@@ -9,6 +9,7 @@ from app.clients.product_queries import (
     PRODUCT_MENU_ID, MENU_QUERY, COLLECTION_PRODUCTS_QUERY, PRODUCT_DETAILS_QUERY,
     VARIANTS_QUERY, MEMBERSHIP_QUERY, PRODUCT_COLLECTIONS_QUERY,
 )
+from app.messaging.product_messages import COLLECTION_MORE_TITLE
 from app.messaging.product_formatter import clean_description, format_product
 from app.schemas.product_browsing import (
     BrowsingError, MenuCollection, MenuCollections, CollectionNavigation, ProductSummary,
@@ -112,7 +113,7 @@ class ProductBrowsingService:
         selected = menu.collections[:9] if page == 1 else menu.collections[9:]
         rows = [CollectionNavigation(id=item.id.rsplit("/", 1)[-1], title=item.title) for item in selected]
         if page == 1 and len(menu.collections) > 9:
-            rows.append(CollectionNavigation(id="2", title="More"))
+            rows.append(CollectionNavigation(id="2", title=COLLECTION_MORE_TITLE))
         return CollectionOptions(collections=rows)
 
     async def product_options(self, collection_id: str) -> ProductOptions:

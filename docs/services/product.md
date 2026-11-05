@@ -29,13 +29,13 @@ GET /products/collections?page=1 returns the first nine unique valid menu
 collections in menu order. page defaults to 1 when omitted, empty (`?page=`), whitespace-only, or the
 unresolved WhatChimp placeholder `#v_selected_collection_id#`. Other inputs
 must be 1 or 2; unsupported
-values return 422. Whitespace around 1 or 2 is trimmed. Pass the selected More
+values return 422. Whitespace around 1 or 2 is trimmed. Pass the selected More Categories
 row id (2), not an actual Shopify collection ID, as the next page value.
 When more than nine collections exist, page 1 appends a final
-navigation row `{"id": "2", "title": "More"}`. The id is the next page number,
-not a Shopify collection ID. On selecting More, call the same endpoint with
+navigation row `{"id": "2", "title": "More Categories"}`. The id is the next page number,
+not a Shopify collection ID. On selecting More Categories, call the same endpoint with
 page=2 instead of querying products for collection 2. Page 2 returns collections
-from position 10 onward with no More row. This is explicitly a two-page scheme;
+from position 10 onward with no More Categories row. This is explicitly a two-page scheme;
 page 2 returns all remaining entries (it is not capped at nine). The response
 still contains only the collections array, without pagination metadata:
 
@@ -101,7 +101,7 @@ The options aggregator follows up to 20 service pages, requesting limit=50;
 each service page scans up to 10 Shopify pages of up to 10 products. Missing or
 repeated continuation cursors fail with 502. All results are buffered before
 returning, so very large collections may exceed Worker execution budgets.
-Page 1 has at most ten rows including More. Page 2 contains all remaining
+Page 1 has at most ten rows including More Categories. Page 2 contains all remaining
 collections; this two-page scheme assumes the current menu fits the chosen UI.
 
 Rich internal summaries and details keep full sanitized descriptions, one
@@ -121,7 +121,7 @@ X-API-Key. Map the collections array using id/title. Save the chosen collection
 ID, then call /api/v1/shopify/products/collection-products?collection_id=SELECTED_ID
 with the same header. Map products using id/title; use the selected product ID
 for the details API or the separate View Details webhook integration.
-Remove former total/menu/tag/URL mappings. Branch on the More navigation row
+Remove former total/menu/tag/URL mappings. Branch on the More Categories navigation row
 before treating its id as a Shopify collection ID; request page=2 when selected.
 
 ```powershell
