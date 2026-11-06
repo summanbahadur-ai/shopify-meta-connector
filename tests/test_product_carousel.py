@@ -151,7 +151,7 @@ def test_http_authentication(monkeypatch, key):
 
 def test_endpoint_preparation_and_missing_transport(monkeypatch):
     monkeypatch.setenv("WHATCHIMP_INBOUND_API_KEY", "expected")
-    monkeypatch.setenv("WHATCHIMP_API_TOKEN", "private-token")
+    monkeypatch.setenv("WHATCHIMP_API_TOKEN_2", "private-token")
     monkeypatch.setenv("WHATCHIMP_PHONE_NUMBER_ID", "123")
     source = browsing(batch([product(1), product(2)]))
     monkeypatch.setattr(card_route, "get_shopify_service", lambda request: SimpleNamespace(client=None))

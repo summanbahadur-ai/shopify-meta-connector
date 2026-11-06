@@ -123,7 +123,7 @@ def test_plain_button_sends_without_token_key_flags_or_api_key(monkeypatch, meth
     # Old disable/diagnostic settings must no longer block a valid request.
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_ENABLED", "false")
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_DIAGNOSTIC_MODE", "true")
-    monkeypatch.setenv("WHATCHIMP_API_TOKEN", "test-token")
+    monkeypatch.setenv("WHATCHIMP_API_TOKEN_2", "test-token")
     monkeypatch.setenv("WHATCHIMP_PHONE_NUMBER_ID", "12345")
     source = SimpleNamespace(product_details=AsyncMock(return_value=details()))
     sender = SimpleNamespace(send_text=AsyncMock(), send_card=AsyncMock())

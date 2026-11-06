@@ -87,7 +87,7 @@ class WhatChimpSettings:
         worker = request.scope.get("env")
         def read(key, default=""):
             return (_read(worker, key) or os.environ.get(key) or default).strip()
-        token = read("WHATCHIMP_API_TOKEN")
+        token = read("WHATCHIMP_API_TOKEN_2")
         phone_id = read("WHATCHIMP_PHONE_NUMBER_ID")
         key = read("WHATCHIMP_INBOUND_API_KEY")
         base = read("WHATCHIMP_API_BASE_URL", "https://app.whatchimp.com/api/v1").rstrip("/")

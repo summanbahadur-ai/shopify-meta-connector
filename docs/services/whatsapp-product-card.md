@@ -28,10 +28,14 @@ sender with that ID and the contact phone number.
 
 Send Content-Type: application/json and X-API-Key matching
 WHATCHIMP_INBOUND_API_KEY. Existing constant-time authentication remains.
-The server reuses WHATCHIMP_API_TOKEN, WHATCHIMP_PHONE_NUMBER_ID and
+The server reuses WHATCHIMP_API_TOKEN_2, WHATCHIMP_PHONE_NUMBER_ID and
 WHATCHIMP_API_BASE_URL (default https://app.whatchimp.com/api/v1), plus existing
 Shopify credentials. No new secrets or dependencies are required.
 Missing/incorrect caller key returns 401; incomplete settings return 503.
+The outgoing token is read only from WHATCHIMP_API_TOKEN_2. Set this GitHub
+Actions secret alongside WHATCHIMP_PHONE_NUMBER_ID and WHATCHIMP_INBOUND_API_KEY;
+the deployment workflow uploads all three to the Worker. Updating GitHub secrets
+alone requires a new deployment before the live application uses them.
 Keep credentials in ignored .env/.dev.vars and production Worker secrets.
 The recipient must be within the applicable 24-hour customer-service window.
 

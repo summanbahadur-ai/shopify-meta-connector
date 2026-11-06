@@ -18,6 +18,22 @@ from app.messaging.product_card_formatter import build_product_card
 SETTINGS = WhatChimpSettings("private-token", "12345", "inbound-secret")
 
 
+@pytest.mark.parametrize("worker", [False, True])
+async def test_configured_token_2_is_sent_to_whatchimp(monkeypatch, worker):
+    values = {"WHATCHIMP_API_TOKEN_2": "new-test-token",
+              "WHATCHIMP_API_TOKEN": "obsolete-test-token",
+              "WHATCHIMP_PHONE_NUMBER_ID": "12345",
+              "WHATCHIMP_INBOUND_API_KEY": "inbound-secret"}
+    for key, value in values.items():
+        monkeypatch.setenv(key, value if not worker else "environment-fallback")
+    settings = WhatChimpSettings.from_request(SimpleNamespace(scope={"env": values} if worker else {}))
+    def handler(req):
+        assert parse_qs(req.content.decode())["apiToken"] == ["new-test-token"]
+        return httpx.Response(200, json={"status": "1"})
+    await WhatChimpClient(settings, httpx.MockTransport(handler)).send_card(
+        "923001234567", {"message": "Test card"})
+
+
 def product(**changes):
     data = dict(id="gid://shopify/Product/123", variant_id="gid://shopify/ProductVariant/456",
         title="Lotion", handle="lotion", description="<p>Moisturizing lotion.</p>",
@@ -141,7 +157,7 @@ def test_invalid_price(value):
 
 def test_endpoint_auth_validation_and_send(monkeypatch,caplog):
     monkeypatch.setenv("WHATCHIMP_INBOUND_API_KEY","inbound-secret")
-    monkeypatch.setenv("WHATCHIMP_API_TOKEN","private-token")
+    monkeypatch.setenv("WHATCHIMP_API_TOKEN_2","private-token")
     monkeypatch.setenv("WHATCHIMP_PHONE_NUMBER_ID","12345")
     source=SimpleNamespace(product_details=AsyncMock(return_value=product()))
     sender=SimpleNamespace(send_card=AsyncMock())
