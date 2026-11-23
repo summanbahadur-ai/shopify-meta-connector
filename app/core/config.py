@@ -76,10 +76,10 @@ class Settings:
 
 @dataclass(frozen=True, repr=False)
 class WhatChimpSettings:
-    api_token: str
-    phone_number_id: str
+    api_key: str
     inbound_api_key: str
-    base_url: str = "https://app.whatchimp.com/api/v1"
+    base_url: str = "https://api.whatchimp.com/v1"
+    from_channel: str = ""
 
     @classmethod
     def from_request(cls, request):
@@ -87,16 +87,16 @@ class WhatChimpSettings:
         worker = request.scope.get("env")
         def read(key, default=""):
             return (_read(worker, key) or os.environ.get(key) or default).strip()
-        token = read("WHATCHIMP_API_TOKEN_2")
-        phone_id = read("WHATCHIMP_PHONE_NUMBER_ID")
+        token = read("WHATCHIMP_API_KEY")
+        channel = read("WHATCHIMP_FROM_CHANNEL")
         key = read("WHATCHIMP_INBOUND_API_KEY")
-        base = read("WHATCHIMP_API_BASE_URL", "https://app.whatchimp.com/api/v1").rstrip("/")
+        base = read("WHATCHIMP_API_BASE_URL", "https://api.whatchimp.com/v1").rstrip("/")
         parts = urlsplit(base)
-        if not token or not phone_id.isascii() or not phone_id.isdigit() or not key:
+        if not token or not key:
             raise ConfigurationError("WhatChimp configuration is incomplete")
-        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment:
+        if parts.scheme != "https" or not parts.hostname or parts.username or parts.password or parts.query or parts.fragment or base == "https://app.whatchimp.com/api/v1":
             raise ConfigurationError("WhatChimp base URL is invalid")
-        return cls(token, phone_id, key, base)
+        return cls(token, key, base, channel)
 
 
 @dataclass(frozen=True, repr=False)

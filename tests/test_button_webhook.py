@@ -52,6 +52,7 @@ from decimal import Decimal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 from urllib.parse import parse_qs
+import json
 import httpx
 from app.core.config import ButtonWebhookSettings, WhatChimpSettings
 from app.schemas.button_webhook import ButtonWebhookError
@@ -75,7 +76,7 @@ def safe_defaults(monkeypatch):
     monkeypatch.setattr(route, "get_shopify_service", lambda request: SimpleNamespace(client=None))
     monkeypatch.setattr(route, "ProductBrowsingService", lambda client: SimpleNamespace(product_details=AsyncMock(return_value=details())))
     monkeypatch.setattr(route, "WhatChimpTextClient", lambda config: SimpleNamespace(send_text=AsyncMock()))
-    monkeypatch.setattr(route.WhatChimpSettings, "from_request", lambda request: WhatChimpSettings("test-token", "123", "test-key"))
+    monkeypatch.setattr(route.WhatChimpSettings, "from_request", lambda request: WhatChimpSettings("test-token", "test-key"))
 
 
 def settings(key, **changes):
@@ -123,7 +124,7 @@ def test_plain_button_sends_without_token_key_flags_or_api_key(monkeypatch, meth
     # Old disable/diagnostic settings must no longer block a valid request.
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_ENABLED", "false")
     monkeypatch.setenv("WHATCHIMP_BUTTON_WEBHOOK_DIAGNOSTIC_MODE", "true")
-    monkeypatch.setenv("WHATCHIMP_API_TOKEN_2", "test-token")
+    monkeypatch.setenv("WHATCHIMP_API_KEY", "test-token")
     monkeypatch.setenv("WHATCHIMP_PHONE_NUMBER_ID", "12345")
     source = SimpleNamespace(product_details=AsyncMock(return_value=details()))
     sender = SimpleNamespace(send_text=AsyncMock(), send_card=AsyncMock())
@@ -259,12 +260,14 @@ async def test_text_wire_payload_and_acknowledgement():
     calls = []
     def handler(request):
         calls.append(request)
-        assert request.url.path == "/api/v1/whatsapp/send"
-        fields = parse_qs(request.content.decode())
-        assert fields["message"] == ["Product details"] and fields["phone_number"] == ["923244374905"]
+        assert request.url.path == "/v1/messages"
+        fields = json.loads(request.content)
+        assert fields == {"to": "+923244374905", "text": "Product details"}
+        assert request.headers["Authorization"] == "Bearer private"
+        assert request.headers["Idempotency-Key"]
         assert "buttons" not in fields and "media_url" not in fields
-        return httpx.Response(200, json={"status":"1"})
-    sender = WhatChimpTextClient(WhatChimpSettings("private", "123", "inbound"), httpx.MockTransport(handler))
+        return httpx.Response(200, json={"id":"msg_test","status":"accepted"})
+    sender = WhatChimpTextClient(WhatChimpSettings("private", "inbound"), httpx.MockTransport(handler))
     await sender.send_text("923244374905", "Product details")
     assert len(calls) == 1
 
@@ -276,7 +279,7 @@ async def test_text_provider_failure_no_retry(code, body, error):
     def handler(request):
         calls.append(request)
         return httpx.Response(code,json=body)
-    sender=WhatChimpTextClient(WhatChimpSettings("private","123","inbound"),httpx.MockTransport(handler))
+    sender=WhatChimpTextClient(WhatChimpSettings("private", "inbound"),httpx.MockTransport(handler))
     with pytest.raises(Exception) as exc:
         await sender.send_text("923244374905","Details")
     assert exc.value.code==error and len(calls)==1
@@ -355,7 +358,7 @@ async def test_text_timeout_has_no_retry():
     def handler(request):
         calls.append(request)
         raise httpx.ReadTimeout("private-token",request=request)
-    sender=WhatChimpTextClient(WhatChimpSettings("private","123","inbound"),httpx.MockTransport(handler))
+    sender=WhatChimpTextClient(WhatChimpSettings("private", "inbound"),httpx.MockTransport(handler))
     with pytest.raises(Exception) as exc:
         await sender.send_text("923244374905","Details")
     assert exc.value.code=="whatchimp_timeout" and len(calls)==1
@@ -466,3 +469,9 @@ def test_plain_webhook_openapi():
     operation = app.openapi()["paths"]["/api/whatsapp/button-click"]["post"]
     assert not operation.get("security")
     assert {p["name"] for p in operation["parameters"]} == {"product_id", "action"}
+
+
+@pytest.fixture(autouse=True)
+def isolate_whatchimp_transport_settings(monkeypatch):
+    monkeypatch.setenv("WHATCHIMP_API_BASE_URL", "https://api.whatchimp.com/v1")
+    monkeypatch.delenv("WHATCHIMP_FROM_CHANNEL", raising=False)

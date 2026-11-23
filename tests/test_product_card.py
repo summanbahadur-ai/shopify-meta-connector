@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
-from urllib.parse import parse_qs
 from decimal import Decimal
+import json
 import httpx
 import pytest
 from fastapi.testclient import TestClient
@@ -15,12 +15,12 @@ from app.services.product_card import ProductCardService
 from app.clients.whatchimp_client import WhatChimpClient
 from app.messaging.product_card_formatter import build_product_card
 
-SETTINGS = WhatChimpSettings("private-token", "12345", "inbound-secret")
+SETTINGS = WhatChimpSettings("private-token", "inbound-secret")
 
 
 @pytest.mark.parametrize("worker", [False, True])
-async def test_configured_token_2_is_sent_to_whatchimp(monkeypatch, worker):
-    values = {"WHATCHIMP_API_TOKEN_2": "new-test-token",
+async def test_configured_api_key_is_sent_to_whatchimp(monkeypatch, worker):
+    values = {"WHATCHIMP_API_KEY": "new-test-token",
               "WHATCHIMP_API_TOKEN": "obsolete-test-token",
               "WHATCHIMP_PHONE_NUMBER_ID": "12345",
               "WHATCHIMP_INBOUND_API_KEY": "inbound-secret"}
@@ -28,8 +28,10 @@ async def test_configured_token_2_is_sent_to_whatchimp(monkeypatch, worker):
         monkeypatch.setenv(key, value if not worker else "environment-fallback")
     settings = WhatChimpSettings.from_request(SimpleNamespace(scope={"env": values} if worker else {}))
     def handler(req):
-        assert parse_qs(req.content.decode())["apiToken"] == ["new-test-token"]
-        return httpx.Response(200, json={"status": "1"})
+        assert req.headers["Authorization"] == "Bearer new-test-token"
+        assert req.headers["Idempotency-Key"]
+        assert "apiToken" not in json.loads(req.content)
+        return httpx.Response(200, json={"id": "msg_test", "status": "accepted"})
     await WhatChimpClient(settings, httpx.MockTransport(handler)).send_card(
         "923001234567", {"message": "Test card"})
 
@@ -54,15 +56,17 @@ async def test_selected_product_uses_real_details_and_media_api(identifier):
     seen = []
     def handler(req):
         seen.append(req)
-        assert req.url.path == "/api/v1/whatsapp/send/file"
-        fields = parse_qs(req.content.decode())
-        assert fields["apiToken"] == ["private-token"]
-        assert fields["phone_number"] == ["923001234567"]
-        assert fields["media_url"] == ["https://cdn.shopify.com/a.jpg"]
-        assert fields["media_type"] == ["image"]
-        assert "https://example.com/lotion" in fields["media_caption_text"][0]
+        assert req.url.path == "/v1/messages"
+        fields = json.loads(req.content)
+        assert req.headers["Authorization"] == "Bearer private-token"
+        assert req.headers["Idempotency-Key"]
+        assert req.headers["Content-Type"] == "application/json"
+        assert fields["to"] == "+923001234567"
+        assert "phone_number_id" not in fields
+        assert fields["media"] == {"url": "https://cdn.shopify.com/a.jpg"}
+        assert "https://example.com/lotion" in fields["text"]
         assert "buttons" not in fields and "media_name" not in fields
-        return httpx.Response(200, json={"status":"1"})
+        return httpx.Response(200, json={"id":"msg_test","status":"accepted"})
     result = await ProductCardService(source, WhatChimpClient(SETTINGS, httpx.MockTransport(handler))).submit(request(product_id=identifier))
     source.product_details.assert_awaited_once_with("gid://shopify/Product/123")
     source.collection_products.assert_not_awaited()
@@ -95,9 +99,9 @@ async def test_no_image_falls_back_to_single_text_send():
     calls=[]
     def handler(req):
         calls.append(req)
-        assert req.url.path == "/api/v1/whatsapp/send"
-        assert "media_url" not in parse_qs(req.content.decode())
-        return httpx.Response(200,json={"status":1})
+        assert req.url.path == "/v1/messages"
+        assert "media" not in json.loads(req.content)
+        return httpx.Response(200,json={"id":"msg_test","status":"accepted"})
     source=SimpleNamespace(product_details=AsyncMock(return_value=product(image_url=None, available=False)))
     await ProductCardService(source,WhatChimpClient(SETTINGS,httpx.MockTransport(handler))).submit(request())
     assert len(calls)==1
@@ -157,7 +161,7 @@ def test_invalid_price(value):
 
 def test_endpoint_auth_validation_and_send(monkeypatch,caplog):
     monkeypatch.setenv("WHATCHIMP_INBOUND_API_KEY","inbound-secret")
-    monkeypatch.setenv("WHATCHIMP_API_TOKEN_2","private-token")
+    monkeypatch.setenv("WHATCHIMP_API_KEY","private-token")
     monkeypatch.setenv("WHATCHIMP_PHONE_NUMBER_ID","12345")
     source=SimpleNamespace(product_details=AsyncMock(return_value=product()))
     sender=SimpleNamespace(send_card=AsyncMock())
@@ -176,3 +180,9 @@ def test_endpoint_auth_validation_and_send(monkeypatch,caplog):
     assert "private-token" not in result.text+caplog.text and "923001234567" not in result.text+caplog.text
     result=client.post("/api/whatsapp/product-card",json={"phone_number":"+923001234567","product_id":"123"},headers=headers)
     assert result.status_code==422 and "923001234567" not in result.text
+
+
+@pytest.fixture(autouse=True)
+def isolate_whatchimp_transport_settings(monkeypatch):
+    monkeypatch.setenv("WHATCHIMP_API_BASE_URL", "https://api.whatchimp.com/v1")
+    monkeypatch.delenv("WHATCHIMP_FROM_CHANNEL", raising=False)

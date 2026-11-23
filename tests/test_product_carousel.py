@@ -151,7 +151,7 @@ def test_http_authentication(monkeypatch, key):
 
 def test_endpoint_preparation_and_missing_transport(monkeypatch):
     monkeypatch.setenv("WHATCHIMP_INBOUND_API_KEY", "expected")
-    monkeypatch.setenv("WHATCHIMP_API_TOKEN_2", "private-token")
+    monkeypatch.setenv("WHATCHIMP_API_KEY", "private-token")
     monkeypatch.setenv("WHATCHIMP_PHONE_NUMBER_ID", "123")
     source = browsing(batch([product(1), product(2)]))
     monkeypatch.setattr(card_route, "get_shopify_service", lambda request: SimpleNamespace(client=None))
@@ -182,3 +182,9 @@ def test_safe_errors_and_no_contact_echo(monkeypatch, caplog):
         assert result.status_code == 422 and "923001234567" not in result.text
     finally:
         app.dependency_overrides.pop(route.get_carousel_service, None)
+
+
+@pytest.fixture(autouse=True)
+def isolate_whatchimp_transport_settings(monkeypatch):
+    monkeypatch.setenv("WHATCHIMP_API_BASE_URL", "https://api.whatchimp.com/v1")
+    monkeypatch.delenv("WHATCHIMP_FROM_CHANNEL", raising=False)

@@ -81,8 +81,10 @@ No new image card, global incoming webhook, cart or order action is created.
 Optional verified reviews use `WHATCHIMP_BUTTON_REVIEWS_VERIFIED=true` and
 `WHATCHIMP_BUTTON_REVIEW_SOURCE=standard` or `judgeme_badge`. Reviews default off;
 missing or failed review data never prevents the main reply. Ratings are never
-invented. Existing WhatChimp text integration sends form-encoded data to
-`/api/v1/whatsapp/send` with a 20-second timeout and no automatic retries. The
+invented. The text client sends Bearer-authenticated JSON to
+`https://api.whatchimp.com/v1/messages` with to and text, a per-send
+Idempotency-Key, a 20-second timeout and no automatic retries. Configuration and
+curated provider errors follow [the product-card transport](whatsapp-product-card.md#whatchimp-transport). The
 customer-service messaging window still applies.
 
 A successful acknowledgement resembles:
@@ -135,6 +137,6 @@ python -m pytest -q
 
 Push the change and deploy through the existing GitHub Actions workflow, then
 replace the old encrypted button URL with the plaintext product/action URL.
-No new GitHub secret is required for this callback. No deployment or real message
+The callback uses the same WHATCHIMP_API_KEY secret as product cards. No deployment or real message
 is performed during implementation. The webhook.site capture has been verified;
 end-to-end delivery through the updated deployed Worker still needs a live test.

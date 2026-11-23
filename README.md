@@ -395,7 +395,7 @@ uv run pywrangler deploy
 
 POST `/api/whatsapp/product-card` accepts `phone_number` and `product_id`, fetches
 live Shopify details, and sends an image with a formatted caption and clickable
-product website link through WhatChimp's Send Media API. Missing images use text.
+product website link through WhatChimp's new Messages API. Missing images use text.
 It requires WhatChimp credentials and the existing inbound X-API-Key. See the
 [product-card service guide](docs/services/whatsapp-product-card.md) for the new
 request/response, flow setup, formatting limits and test instructions.
@@ -416,3 +416,19 @@ This public callback uses no token decryption or X-API-Key. Existing protected
 endpoints retain their authentication. WhatChimp's captured request is POST JSON.
 See [the button webhook guide](docs/services/whatsapp-button-details.md) for the captured payload,
 setup, duplicate suppression and security limitations.
+
+
+### WhatChimp new-platform configuration
+
+Create a key under WhatChimp **Settings > Integrations > API keys** with
+**Send messages** access to the WhatsApp channel. Save it in GitHub Actions as
+`WHATCHIMP_API_KEY`; keep `WHATCHIMP_INBOUND_API_KEY` unchanged. For local runs,
+set the same names in `.env` or `.dev.vars`.
+
+Remove the old `WHATCHIMP_API_BASE_URL` override or set it to
+`https://api.whatchimp.com/v1`. Optionally set Actions variable
+`WHATCHIMP_FROM_CHANNEL` to the sender's `ch_` channel ID or number when multiple
+channels could send. Old API tokens and `WHATCHIMP_PHONE_NUMBER_ID` are no longer
+used. Run the deployment workflow after updating these settings. Both product
+images and product-details text use JSON `POST /v1/messages` with Bearer auth.
+See the [transport contract](docs/services/whatsapp-product-card.md#whatchimp-transport).

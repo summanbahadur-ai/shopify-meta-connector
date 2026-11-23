@@ -28,14 +28,19 @@ sender with that ID and the contact phone number.
 
 Send Content-Type: application/json and X-API-Key matching
 WHATCHIMP_INBOUND_API_KEY. Existing constant-time authentication remains.
-The server reuses WHATCHIMP_API_TOKEN_2, WHATCHIMP_PHONE_NUMBER_ID and
-WHATCHIMP_API_BASE_URL (default https://app.whatchimp.com/api/v1), plus existing
-Shopify credentials. No new secrets or dependencies are required.
+The server uses WHATCHIMP_API_KEY and WHATCHIMP_API_BASE_URL (default
+https://api.whatchimp.com/v1), plus existing Shopify credentials.
 Missing/incorrect caller key returns 401; incomplete settings return 503.
-The outgoing token is read only from WHATCHIMP_API_TOKEN_2. Set this GitHub
-Actions secret alongside WHATCHIMP_PHONE_NUMBER_ID and WHATCHIMP_INBOUND_API_KEY;
-the deployment workflow uploads all three to the Worker. Updating GitHub secrets
-alone requires a new deployment before the live application uses them.
+Create a new-platform API key in WhatChimp Settings > Integrations > API keys
+with Send messages access to the required WhatsApp channel. Save it as GitHub
+Actions secret WHATCHIMP_API_KEY alongside WHATCHIMP_INBOUND_API_KEY.
+The deployment workflow uploads both to the Worker. WHATCHIMP_FROM_CHANNEL is an
+optional GitHub Actions variable (a ch_ channel ID or sender number); when empty,
+WhatChimp chooses the customer's last channel. Set it when the workspace has
+ambiguous senders. WHATCHIMP_API_BASE_URL is an optional Actions variable; remove
+an old-platform override or set it to https://api.whatchimp.com/v1.
+Local .env/.dev.vars use the same names. Old tokens and phone_number_id are not
+used. Updating secrets alone requires a new deployment before the live app uses them.
 Keep credentials in ignored .env/.dev.vars and production Worker secrets.
 The recipient must be within the applicable 24-hour customer-service window.
 
@@ -91,31 +96,36 @@ If no product image is available, submit one text message with the same content.
 
 ## WhatChimp transport
 
-The supplied Developer Console reference documents POST form encoding:
+The [new-platform send reference](https://dashboard.whatchimp.com/developers/endpoints/send-message)
+defines JSON requests with Bearer authentication:
 
 ```text
-POST https://app.whatchimp.com/api/v1/whatsapp/send/file
-apiToken=FROM_ENV
-phone_number_id=FROM_ENV
-phone_number=CONTACT_PHONE
-media_url=SHOPIFY_IMAGE_URL
-media_type=image
-media_caption_text=FORMATTED_CAPTION
+POST https://api.whatchimp.com/v1/messages
+Authorization: Bearer FROM_ENV
+Content-Type: application/json
+Idempotency-Key: UNIQUE_UUID
+
+{"to":"+923244374905","text":"FORMATTED_CAPTION","media":{"url":"SHOPIFY_IMAGE_URL"}}
 ```
 
-media_type=image is explicit even for URLs without file extensions. media_id,
-media_name and reply buttons are not sent. For missing images, use POST
-/whatsapp/send with the message field instead. WhatChimpClient.send_card
-implements both paths. The separate WhatChimpTextClient used by the existing
-button-click webhook is unchanged.
+The client adds the plus prefix to validated international digits. Missing images
+omit media and send the same text. Optional WHATCHIMP_FROM_CHANNEL becomes from.
+Both card and button-details clients share this transport. No old form fields,
+reply buttons or media uploads are sent.
 
 Use httpx.AsyncClient, 20-second timeout, no redirects and no automatic retries.
-Success requires HTTP 2xx and status string/integer 1. Invalid JSON, status 0,
-invalid acknowledgement, auth errors, rate limits and network failures return
-curated errors. Timeout/connection failures have unknown send status: check
-WhatChimp before retrying to avoid duplicate messages. No send idempotency store
-is added. Diagnostics retain only redacted upstream structure and HTTP status;
-credentials, contact data and raw upstream messages are not logged or returned.
+Each send gets a fresh Idempotency-Key; it is not persisted across separate HTTP
+requests, so a manual retry is a new send. Success requires HTTP 2xx, status
+accepted and a msg_ ID; acceptance does not confirm delivery. Invalid JSON or
+acknowledgements and unknown provider errors return curated 502 errors.
+Authentication maps to whatchimp_authentication (502), rate limiting to
+whatchimp_rate_limit (429), and timeout/connection failures to 504/502.
+Known error codes window_closed, no_conversation, contact_blocked and
+channel_not_connected map to curated whatchimp_-prefixed 409 errors; from_required
+maps to whatchimp_from_required (422). Raw provider messages are never exposed.
+Timeout/connection failures have unknown send status: check WhatChimp before
+retrying to avoid duplicates. Diagnostics retain only redacted structure and HTTP
+status; credentials, contact data and raw upstream messages are not logged or returned.
 
 ## Response
 
@@ -174,6 +184,7 @@ python -m pytest -q
 Source files: app/api/product_card.py, app/schemas/product_card.py,
 app/services/product_card.py, app/messaging/product_card_messages.py,
 app/messaging/product_card_formatter.py and app/clients/whatchimp_client.py.
-No deployment or real message is sent during implementation. The media field
-mapping follows the supplied WhatChimp console documentation; live acceptance
-and rendering through this new path still require a deployed test.
+Live validation through the local service received HTTP 201 from the new API,
+and the test recipient confirmed receipt of the product card after the dashboard
+switch. Deployment and validation through the production Worker remain separate
+checks. Automated tests continue to mock external sends.
